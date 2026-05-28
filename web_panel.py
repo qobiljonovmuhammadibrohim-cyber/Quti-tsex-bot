@@ -3011,6 +3011,38 @@ h2 {{ font-size: 16px; margin: 16px 0 10px; color: #818cf8 }}
     return web.Response(text=html, content_type="text/html")
 
 
+
+
+@_require_auth
+async def worker_toggle(request: web.Request):
+    """Ishchini faollashtirish/bloklash."""
+    try:
+        wid = int(request.match_info.get("id", "0"))
+    except ValueError:
+        wid = 0
+    async with AsyncSessionLocal() as db:
+        w = await db.get(User, wid)
+        if w:
+            w.is_active = not w.is_active
+            await db.commit()
+    raise web.HTTPFound("/web/workers")
+
+
+@_require_auth
+async def worker_delete(request: web.Request):
+    """Ishchini o'chirish (is_active=False)."""
+    try:
+        wid = int(request.match_info.get("id", "0"))
+    except ValueError:
+        wid = 0
+    async with AsyncSessionLocal() as db:
+        w = await db.get(User, wid)
+        if w:
+            w.is_active = False
+            await db.commit()
+    raise web.HTTPFound("/web/workers")
+
+
 @_require_auth
 async def warehouse_kirim(request: web.Request):
     """JSON yoki form data — ikkalasini ham qabul qiladi."""
@@ -6916,7 +6948,6 @@ def create_app() -> web.Application:
 
     # Workers
     app.router.add_get("/web/workers",                workers)
-    app.router.add_get("/web/workers/{id}/report",    worker_report)
     app.router.add_post("/web/workers/{id}/toggle",   worker_toggle)
     app.router.add_post("/web/workers/{id}/delete",   worker_delete)
 
