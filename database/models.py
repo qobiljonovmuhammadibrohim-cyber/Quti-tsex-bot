@@ -11,7 +11,7 @@ from sqlalchemy import (
     ForeignKey, Text, Enum, BigInteger, Date
 )
 from sqlalchemy.orm import relationship, declarative_base
-from datetime import date
+from datetime import date, datetime
 from sqlalchemy.sql import func
 import enum
 
