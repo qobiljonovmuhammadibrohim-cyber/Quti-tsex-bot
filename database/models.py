@@ -334,6 +334,16 @@ class SalaryReport(Base):
 
 # ═══ DAVOMAT (KASALLIK / TA'TIL) ══════════════════════════════════════════════
 
+class OrderStatus(str, enum.Enum):
+    """Buyurtma holatlari."""
+    yangi         = "yangi"
+    qabul_qilindi = "qabul_qilindi"
+    ishlab        = "ishlab"
+    tayyor        = "tayyor"
+    yetkazildi    = "yetkazildi"
+    bekor         = "bekor"
+
+
 class AttendanceType(str, enum.Enum):
     ish        = "ish"        # Oddiy ish kuni
     kasallik   = "kasallik"   # Kasallik varaqasi bilan
