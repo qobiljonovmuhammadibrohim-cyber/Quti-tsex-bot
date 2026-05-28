@@ -1607,7 +1607,7 @@ new Chart(document.getElementById('stockChart'), {{
 }});
 </script>
 """
-    return web.Response(text=_base("Bosh sahifa", content, nav="dashboard"), content_type="text/html")
+    return web.Response(text=_base("Bosh sahifa", "dashboard", content), content_type="text/html")
 
 
 
@@ -1958,7 +1958,7 @@ new Chart(document.getElementById('trendChart'), {{
 }});
 </script>
 """
-    return web.Response(text=_base("Ishlab chiqarish tahlili", content, nav="production"), content_type="text/html")
+    return web.Response(text=_base("Ishlab chiqarish tahlili", "production", content), content_type="text/html")
 
 
 
@@ -2081,7 +2081,7 @@ async def inventory_health(request: web.Request):
     parts.append('</style>')
 
     content = "\n".join(parts)
-    return web.Response(text=_base("Ombor salomatligi", content, nav="health"), content_type="text/html")
+    return web.Response(text=_base("Ombor salomatligi", "health", content), content_type="text/html")
 
 
 
@@ -2197,7 +2197,7 @@ async def activity_feed(request: web.Request):
     parts.append('<script>setTimeout(()=>location.reload(), 30000);</script>')
     
     content = "\n".join(parts)
-    return web.Response(text=_base("Real-time aktivlik", content, nav="activity"), content_type="text/html")
+    return web.Response(text=_base("Real-time aktivlik", "activity", content), content_type="text/html")
 
 
 
@@ -2391,7 +2391,7 @@ async def quality_dashboard(request: web.Request):
     parts.append('</style>')
     
     content = "\n".join(parts)
-    return web.Response(text=_base("Sifat boshqaruvi", content, nav="quality"), content_type="text/html")
+    return web.Response(text=_base("Sifat boshqaruvi", "quality", content), content_type="text/html")
 
 
 @_require_auth
@@ -2891,7 +2891,7 @@ async def web_system_health(request: web.Request):
     parts.append('<script>setTimeout(()=>location.reload(), 30000);</script>')
 
     content = "\n".join(parts)
-    return web.Response(text=_base("Tizim salomatligi", content, nav="health"), content_type="text/html")
+    return web.Response(text=_base("Tizim salomatligi", "health", content), content_type="text/html")
 
 
 
@@ -3368,7 +3368,7 @@ async def workers(request: web.Request):
     parts.append('</style>')
 
     content = "\n".join(parts)
-    return web.Response(text=_base("Ishchilar", content, nav="workers"), content_type="text/html")
+    return web.Response(text=_base("Ishchilar", "workers", content), content_type="text/html")
 
 
 @_require_auth
@@ -3669,7 +3669,7 @@ new Chart(document.getElementById('incomeChart'), {{
 }});
 </script>
 """
-    return web.Response(text=_base(f"{worker.full_name}", content, nav="workers"), content_type="text/html")
+    return web.Response(text=_base(f"{worker.full_name}", "workers", content), content_type="text/html")
 
 
 
@@ -3985,7 +3985,7 @@ function quickKirim(id, nom) {{
 }}
 </script>
 """
-    return web.Response(text=_base("Ombor sog'lig'i", content, nav="inventory_health"), content_type="text/html")
+    return web.Response(text=_base("Ombor sog'lig'i", "inventory_health", content), content_type="text/html")
 
 
 
@@ -4229,7 +4229,7 @@ new Chart(document.getElementById('dailyChart'), {{
 }});
 </script>
 """
-    return web.Response(text=_base("Sifat boshqaruvi", content, nav="quality"), content_type="text/html")
+    return web.Response(text=_base("Sifat boshqaruvi", "quality", content), content_type="text/html")
 
 
 
@@ -4415,7 +4415,7 @@ async def notifications_center(request: web.Request):
 .notif-arrow {{ color:var(--muted); text-align:right; font-size:14px }}
 </style>
 """
-    return web.Response(text=_base("Bildirishnomalar", content, nav="notif"), content_type="text/html")
+    return web.Response(text=_base("Bildirishnomalar", "notif", content), content_type="text/html")
 
 
 
@@ -4577,7 +4577,7 @@ async def global_search(request):
         '.search-num { font-weight:700; font-size:13px }'
         '</style>'
     )
-    return web.Response(text=_base("Qidiruv", content, nav="search"), content_type="text/html")
+    return web.Response(text=_base("Qidiruv", "search", content), content_type="text/html")
 
 
 
@@ -4690,7 +4690,7 @@ details[open] .help-q::before { content: "- " }
 }
 </style>
 '''
-    return web.Response(text=_base("Yordam", content, nav="help"), content_type="text/html")
+    return web.Response(text=_base("Yordam", "help", content), content_type="text/html")
 
 
 @_require_auth
@@ -5064,7 +5064,7 @@ async def salary_projection(request: web.Request):
     parts.append('</div></div>')
     
     content = "\n".join(parts)
-    return web.Response(text=_base("Maosh prognozi", content, nav="salary_projection"), content_type="text/html")
+    return web.Response(text=_base("Maosh prognozi", "salary_projection", content), content_type="text/html")
 
 
 @_require_auth
