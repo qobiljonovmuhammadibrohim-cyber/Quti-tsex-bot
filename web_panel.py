@@ -38,6 +38,7 @@ from datetime import date, datetime, timedelta
 from aiohttp import web
 
 from sqlalchemy import select, func, extract, desc, case as sa_case
+import sqlalchemy.sql.functions as sf
 
 from config.settings import WEB_HOST, WEB_PORT, WEB_PASSWORD, SECRET_KEY
 
