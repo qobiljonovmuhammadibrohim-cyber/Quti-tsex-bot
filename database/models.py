@@ -423,7 +423,7 @@ class Order(Base):
     title           = Column(String(200), nullable=False)
     description     = Column(Text, nullable=True)
 
-    status          = Column(SAEnum(OrderStatus), default=OrderStatus.yangi)
+    status          = Column(Enum(OrderStatus), default=OrderStatus.yangi)
     priority        = Column(Integer, default=3)  # 1-5, 1 eng yuqori
 
     total_amount    = Column(Float, default=0.0)
