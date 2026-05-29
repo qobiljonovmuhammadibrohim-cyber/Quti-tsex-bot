@@ -7119,6 +7119,12 @@ def create_app() -> web.Application:
     app.router.add_post("/web/login",         web_login)
     app.router.add_get("/web/logout",         web_logout)
     app.router.add_get("/web/",                       dashboard)
+    app.router.add_get("/web/production", production_analytics)
+    app.router.add_get("/web/health", inventory_health)
+    app.router.add_get("/web/activity", activity_feed)
+    app.router.add_get("/web/quality", quality_dashboard)
+    app.router.add_get("/web/salary-projection", salary_projection)
+    app.router.add_get("/web/system-health", web_system_health)
     app.router.add_get("/web/stats-advanced",         stats_advanced)
     app.router.add_get("/web/material-flow",          material_flow)
     app.router.add_get("/web/help",                   help_page)
@@ -7141,6 +7147,7 @@ def create_app() -> web.Application:
 
     # Workers
     app.router.add_get("/web/workers",                workers)
+    app.router.add_get("/web/workers/{worker_id}",    worker_detail)
     app.router.add_post("/web/workers/{id}/toggle",   worker_toggle)
     app.router.add_post("/web/workers/{id}/delete",   worker_delete)
 
