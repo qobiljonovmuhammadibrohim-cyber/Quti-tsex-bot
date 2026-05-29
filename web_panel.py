@@ -459,6 +459,7 @@ def _base(title: str, active: str, content: str, extra_js: str = "") -> str:
         ("dashboard",        "🏠", "Bosh sahifa",      "/web/"),
         ("production",       "🏭", "Ishlab chiqarish", "/web/production"),
         ("inventory_health", "🏥", "Ombor salomatligi","/web/health"),
+        ("zero-stock",       "⚠️", "Tugaganlar",         "/web/zero-stock"),
         ("activity",         "📡", "Real-time oqim",  "/web/activity"),
         ("quality",          "✅", "Sifat boshqaruvi", "/web/quality"),
         ("workers",          "👥", "Ishchilar",         "/web/workers"),
@@ -519,41 +520,129 @@ def _base(title: str, active: str, content: str, extra_js: str = "") -> str:
 <style>{CSS}
 
 
-/* MOBIL RESPONSIVE */
+/* ═══ KUCHLI MOBIL RESPONSIVE ═══ */
+
+/* Planshet va kichik ekranlar (≤ 1024px) */
+@media (max-width: 1024px) {{
+  .sidebar {{ width: 180px !important; }}
+  .main {{ padding: 16px !important; }}
+  .stats-grid {{ grid-template-columns: repeat(2, 1fr) !important; }}
+}}
+
+/* Telefon (≤ 768px) — sidebar yuqorida horizontal nav */
 @media (max-width: 768px) {{
+  body {{ font-size: 14px !important; }}
   .sidebar {{
-    width: 100% !important;
-    height: auto !important;
+    width: 100% !important; height: auto !important;
     position: relative !important;
     border-right: none !important;
     border-bottom: 1px solid #1e293b !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }}
-  .sidebar nav {{ display: flex; flex-wrap: wrap; gap: 4px; padding: 8px !important; }}
+  .sidebar h1, .sidebar .brand {{ font-size: 16px !important; padding: 10px !important; text-align: center !important; }}
+  .sidebar nav {{
+    display: flex !important; flex-wrap: nowrap !important;
+    gap: 4px !important; padding: 8px !important;
+    overflow-x: auto !important;
+  }}
   .sidebar nav a {{
-    padding: 6px 10px !important;
+    padding: 8px 10px !important;
     font-size: 12px !important;
-    border-radius: 8px;
-    flex: 1 1 auto;
-    text-align: center;
+    border-radius: 8px !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    text-align: center !important;
   }}
-  .main {{ margin-left: 0 !important; padding: 12px !important; }}
-  .card {{ padding: 12px !important; margin-bottom: 12px !important; }}
-  h1 {{ font-size: 18px !important; }}
-  h2 {{ font-size: 16px !important; }}
-  table {{ font-size: 12px !important; }}
-  table th, table td {{ padding: 6px 4px !important; }}
-  /* Jadval gorizontal scroll */
-  .table-wrap {{ overflow-x: auto !important; -webkit-overflow-scrolling: touch; }}
-  .stats-grid {{ grid-template-columns: 1fr 1fr !important; gap: 8px !important; }}
-  .btn {{ padding: 8px 12px !important; font-size: 13px !important; }}
-  input, select, textarea {{ font-size: 14px !important; padding: 8px !important; }}
+  .main {{ margin-left: 0 !important; padding: 12px !important; max-width: 100% !important; }}
+  .card {{ padding: 12px !important; margin-bottom: 10px !important; border-radius: 10px !important; }}
+  h1 {{ font-size: 18px !important; line-height: 1.3 !important; }}
+  h2 {{ font-size: 15px !important; line-height: 1.3 !important; }}
+  h3 {{ font-size: 14px !important; }}
+  p  {{ font-size: 13px !important; }}
+
+  /* Jadvallar — gorizontal scroll */
+  .table-wrap {{ overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; width: 100% !important; }}
+  table {{ font-size: 12px !important; min-width: 100% !important; }}
+  table th, table td {{ padding: 6px 4px !important; white-space: nowrap !important; }}
+
+  /* Statistika kartochkalari — 2 ustun */
+  .stats-grid {{ grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }}
+  .stat-card {{ padding: 12px !important; }}
+  .stat-value {{ font-size: 20px !important; }}
+  .stat-label {{ font-size: 10px !important; }}
+  .stat-trend {{ font-size: 10px !important; }}
+
+  /* Charts — kichikroq */
+  .chart-card {{ min-height: 280px !important; }}
+  .charts-row {{ grid-template-columns: 1fr !important; gap: 10px !important; }}
+
+  /* Tugmalar */
+  .btn {{
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+    width: 100% !important;
+    margin-bottom: 4px !important;
+  }}
+  .btn-group .btn {{ width: auto !important; flex: 1 !important; }}
+
+  /* Formalar */
+  input, select, textarea {{
+    font-size: 16px !important;  /* iOS zoom emas */
+    padding: 10px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }}
   .form-row {{ grid-template-columns: 1fr !important; }}
+
+  /* Period switcher (kichkina tugmalar) */
+  .period-switcher {{ flex-wrap: wrap !important; gap: 4px !important; }}
+  .btn-period {{ padding: 6px 10px !important; font-size: 12px !important; flex: 1 1 auto !important; }}
+
+  /* Alert/notification */
+  .alert, .alert-r {{ padding: 10px !important; font-size: 13px !important; }}
+
+  /* Modal/overlay */
+  .overlay {{ padding: 10px !important; }}
+  .modal {{ width: 95% !important; max-width: 95% !important; padding: 16px !important; }}
 }}
 
+/* Juda kichik telefonlar (≤ 480px) */
 @media (max-width: 480px) {{
-  .sidebar nav a {{ flex: 1 1 100%; }}
+  body {{ font-size: 13px !important; }}
+  .main {{ padding: 8px !important; }}
+  .card {{ padding: 10px !important; border-radius: 8px !important; }}
+  h1 {{ font-size: 16px !important; }}
+  h2 {{ font-size: 14px !important; }}
+
+  /* Statistika — 1 ustun */
   .stats-grid {{ grid-template-columns: 1fr !important; }}
+  .stat-card {{ padding: 10px !important; }}
+  .stat-value {{ font-size: 18px !important; }}
+
+  /* Jadvallar yana kichik */
   table {{ font-size: 11px !important; }}
+  table th, table td {{ padding: 4px 3px !important; }}
+
+  /* Sidebar nav — to'liq yashir kichik tugmalari */
+  .sidebar nav a {{ padding: 6px 8px !important; font-size: 11px !important; }}
+
+  /* Form */
+  input, select, textarea {{ padding: 8px !important; font-size: 14px !important; }}
+
+  /* Rank list */
+  .rank-row {{ grid-template-columns: 28px 1fr auto !important; gap: 6px !important; padding: 6px !important; }}
+  .rank-stat {{ display: none !important; }}
+
+  /* Chain card */
+  .chain-card {{ padding: 8px !important; }}
+  .chain-count {{ font-size: 18px !important; }}
+}}
+
+/* Touch interactivlik */
+@media (hover: none) and (pointer: coarse) {{
+  .btn:active {{ transform: scale(0.97) !important; }}
+  .card:active {{ background: rgba(99,102,241,0.05) !important; }}
 }}
 
 
@@ -3042,6 +3131,105 @@ async def worker_delete(request: web.Request):
             w.is_active = False
             await db.commit()
     raise web.HTTPFound("/web/workers")
+
+
+
+
+@_require_auth
+async def zero_stock_page(request: web.Request):
+    """Tugagan mahsulotlar — saqlash yoki o'chirish."""
+    async with AsyncSessionLocal() as db:
+        r = await db.execute(
+            select(WarehouseProduct)
+            .where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.miqdor <= 0,
+            )
+            .order_by(WarehouseProduct.name)
+        )
+        products = r.scalars().all()
+
+    parts = []
+    parts.append('<h1 style="margin-bottom:4px">⚠️ Tugagan mahsulotlar</h1>')
+    parts.append('<p style="color:var(--muted);margin-bottom:20px">0 ga tushgan mahsulotlar — saqlash yoki butunlay o\'chirish</p>')
+
+    if not products:
+        parts.append('<div class="card" style="text-align:center;padding:40px">')
+        parts.append('<h2 style="color:var(--green)">🎉 Tugagan mahsulot yo\'q!</h2>')
+        parts.append('<p style="color:var(--muted)">Ombor holati yaxshi.</p>')
+        parts.append('</div>')
+    else:
+        parts.append('<div class="card" style="background:rgba(245,158,11,0.1);border-left:4px solid #f59e0b;margin-bottom:16px">')
+        parts.append('<b>⚠️ {} ta mahsulot tugagan!</b><br>Saqlash yoki o\'chirish kerakligini hal qiling.'.format(len(products)))
+        parts.append('</div>')
+
+        for p in products:
+            name = h(p.name)
+            cat_name = p.category.value if p.category else ""
+            tur = (" — " + h(p.tur)) if p.tur else ""
+
+            badges = []
+            if p.razmer:     badges.append('<span style="background:rgba(99,102,241,.15);color:#a5b4fc;padding:2px 8px;border-radius:8px;font-size:11px">' + h(p.razmer) + '</span>')
+            if p.razmer_tur: badges.append('<span style="background:rgba(139,92,246,.15);color:#c4b5fd;padding:2px 8px;border-radius:8px;font-size:11px">' + h(p.razmer_tur) + '</span>')
+            if p.rang:       badges.append('<span style="background:rgba(236,72,153,.15);color:#f9a8d4;padding:2px 8px;border-radius:8px;font-size:11px">🎨 ' + h(p.rang) + '</span>')
+
+            row = '<div class="card" style="margin-bottom:10px;border-left:4px solid var(--red)">'
+            row += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+            row += '<div>'
+            row += '<div style="font-weight:700;font-size:15px;margin-bottom:4px">📦 ' + name + '</div>'
+            row += '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">' + cat_name + tur + '</div>'
+            row += '<div style="display:flex;gap:6px;flex-wrap:wrap">' + " ".join(badges) + '</div>'
+            row += '</div>'
+            row += '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+            row += '<button class="btn" style="background:#10b981;color:#fff;padding:8px 14px" onclick="zeroKeep(' + str(p.id) + ', \'' + name + '\')">✅ Saqlash</button>'
+            row += '<button class="btn" style="background:#ef4444;color:#fff;padding:8px 14px" onclick="zeroDelete(' + str(p.id) + ', \'' + name + '\')">❌ O\'chirish</button>'
+            row += '</div></div></div>'
+            parts.append(row)
+
+    js = """
+<script>
+function zeroKeep(id, nom) {
+  if (!confirm('"' + nom + '" saqlansinmi?')) return;
+  fetch('/web/warehouse/zero-keep', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({product_id: id})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload(); else alert('Xato');
+  });
+}
+function zeroDelete(id, nom) {
+  if (!confirm('"' + nom + '" butunlay o\'chirilsinmi?')) return;
+  fetch('/web/warehouse/delete', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({product_id: id})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload(); else alert('Xato');
+  });
+}
+</script>
+"""
+    parts.append(js)
+
+    content = "\n".join(parts)
+    return web.Response(text=_base("Tugagan mahsulotlar", "zero-stock", content), content_type="text/html")
+
+
+@_require_auth
+async def warehouse_zero_keep(request: web.Request):
+    """Mahsulotni saqlash (zero_notified = False)."""
+    try:
+        data = await request.json()
+        pid = int(data.get("product_id", 0))
+    except Exception:
+        return web.json_response({"ok": False, "error": "Xato"})
+
+    async with AsyncSessionLocal() as db:
+        p = await db.get(WarehouseProduct, pid)
+        if not p:
+            return web.json_response({"ok": False, "error": "Topilmadi"})
+        p.zero_notified = False
+        await db.commit()
+    return web.json_response({"ok": True})
 
 
 @_require_auth
