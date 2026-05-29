@@ -62,9 +62,7 @@ def _normalize_razmer(val) -> str | None:
 
 from database.db import AsyncSessionLocal
 from database.models import (
-    User, UserRole, WarehouseProduct, WarehouseLog, ProductCategory,
-    WorkEntry, WorkStatus, WorkType, WorkPrice,
-    SalaryReport, Penalty, PenaltyType, Advance,
+    User, UserRole, WarehouseProduct, WarehouseLog, ProductCategory, WorkEntry, WorkStatus, WorkType, WorkPrice, SalaryReport, Penalty, PenaltyType, Advance, Attendance, AttendanceType, WorkSession,
 )
 from database.queries import (
     get_all_active_users, get_users_by_role,
@@ -2724,6 +2722,21 @@ async def warehouse(request: web.Request):
 </div>
 """
     js = """
+function deleteProduct(id, nom) {
+  if (!confirm('"' + nom + '" mahsulotini butunlay o\'chirmoqchimisiz?\n\nBu amalni qaytarib bo\'lmaydi!')) return;
+  fetch('/web/warehouse/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({product_id: id})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) { location.reload(); }
+    else { alert('Xato: ' + (d.error || 'nomalum')); }
+  })
+  .catch(e => alert('Tarmoq xatosi: ' + e));
+}
+
 function openKirim(id, name, birlik) {
   document.getElementById('kirim-pid').value = id;
   document.getElementById('kirim-sub').textContent = name;
