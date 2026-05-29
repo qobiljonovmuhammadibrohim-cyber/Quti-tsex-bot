@@ -1836,10 +1836,10 @@ async def production_analytics(request: web.Request):
                 User.full_name,
                 func.count(WorkEntry.id),
             )
-            .join(WorkEntry, WorkEntry.checked_by == User.id)
+            .join(WorkEntry, WorkEntry.inspector_id == User.id)
             .where(
                 WorkEntry.work_date >= start_date,
-                WorkEntry.checked_at.is_not(None),
+                WorkEntry.finished_at.is_not(None),
             )
             .group_by(User.id, User.full_name)
             .order_by(func.count(WorkEntry.id).desc())
