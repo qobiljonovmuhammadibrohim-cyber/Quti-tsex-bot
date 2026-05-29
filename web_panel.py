@@ -2529,6 +2529,7 @@ async def warehouse(request: web.Request):
   <button class="btn btn-g btn-xs" onclick="openKirim({p.id}, '{h(p.name)}', '{h(p.birlik)}')">+Kirim</button>
   <button class="btn btn-d btn-xs" onclick="openChiqim({p.id}, '{h(p.name)}', {p.miqdor}, '{h(p.birlik)}')">-Chiqim</button>
   <button class="btn btn-cy btn-xs" onclick="openThresh({p.id}, '{h(p.name)}', {p.min_threshold}, {p.yellow_threshold})">⚙️</button>
+  <button class="btn btn-d btn-xs" onclick="deleteProduct({p.id}, '{h(p.name)}')" title="Mahsulotni o'chirish">🗑</button>
 </td>
 </tr>"""
 
