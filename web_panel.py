@@ -7135,6 +7135,9 @@ def create_app() -> web.Application:
     app.router.add_post("/web/warehouse/thresholds",  warehouse_thresholds)
     app.router.add_get("/web/warehouse/export",       warehouse_export)
     app.router.add_get("/web/warehouse/logs",         warehouse_logs)
+    app.router.add_post("/web/warehouse/delete",      warehouse_delete)
+    app.router.add_get("/web/zero-stock",             zero_stock_page)
+    app.router.add_post("/web/warehouse/zero-keep",   warehouse_zero_keep)
 
     # Workers
     app.router.add_get("/web/workers",                workers)
