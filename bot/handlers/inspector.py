@@ -875,8 +875,8 @@ async def inspector_dashboard(message: Message, db: AsyncSession):
             sf.sum(sa_case((WorkEntry.status == WorkStatus.approved, 1), else_=0)),
             sf.sum(sa_case((WorkEntry.status == WorkStatus.rejected, 1), else_=0)),
         ).where(
-            WorkEntry.checked_by == user.id,
-            func.date(WorkEntry.checked_at) == today,
+            WorkEntry.inspector_id == user.id,
+            func.date(WorkEntry.finished_at) == today,
         )
     )
     t = r_today.one()
@@ -889,8 +889,8 @@ async def inspector_dashboard(message: Message, db: AsyncSession):
             sf.sum(sa_case((WorkEntry.status == WorkStatus.approved, 1), else_=0)),
             sf.sum(sa_case((WorkEntry.status == WorkStatus.rejected, 1), else_=0)),
         ).where(
-            WorkEntry.checked_by == user.id,
-            WorkEntry.checked_at >= week_ago,
+            WorkEntry.inspector_id == user.id,
+            WorkEntry.finished_at >= week_ago,
         )
     )
     w = r_week.one()
@@ -917,14 +917,14 @@ async def inspector_dashboard(message: Message, db: AsyncSession):
     # Eng ko'p sabab
     r_reasons = await db.execute(
         select(
-            WorkEntry.rejection_reason,
+            WorkEntry.rad_sababi,
             func.count(WorkEntry.id),
         ).where(
             WorkEntry.work_date >= week_ago,
             WorkEntry.status == WorkStatus.rejected,
-            WorkEntry.rejection_reason.is_not(None),
+            WorkEntry.rad_sababi.is_not(None),
         )
-        .group_by(WorkEntry.rejection_reason)
+        .group_by(WorkEntry.rad_sababi)
         .order_by(func.count(WorkEntry.id).desc())
         .limit(5)
     )
@@ -1068,8 +1068,8 @@ async def batch_approve_all(cb: CallbackQuery, db: AsyncSession):
     count = 0
     for w in works:
         w.status     = WorkStatus.approved
-        w.checked_by = user.id
-        w.checked_at = now
+        w.inspector_id = user.id
+        w.finished_at = now
         count += 1
 
     await db.commit()
@@ -1100,8 +1100,8 @@ async def batch_approve_user(cb: CallbackQuery, db: AsyncSession):
     count = 0
     for w in works:
         w.status     = WorkStatus.approved
-        w.checked_by = user.id
-        w.checked_at = now
+        w.inspector_id = user.id
+        w.finished_at = now
         count += 1
 
     await db.commit()
