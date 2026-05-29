@@ -57,7 +57,63 @@ async def _chiqim(
         return warn
 
     await update_product_miqdor(db, product_id, -miqdor, user_id, izoh, work_entry_id)
+
+    # 0 ga tushganda admin ogohlantirish
+    try:
+        await db.refresh(p)
+        if float(p.miqdor) <= 0 and not getattr(p, "zero_notified", False):
+            p.zero_notified = True
+            await db.flush()
+            await _notify_admin_zero(db, p)
+    except Exception as e:
+        logger.warning("Zero notification xatosi: %s", e)
+
     return None
+
+
+async def _notify_admin_zero(db, product):
+    """Mahsulot 0 ga tushganda adminga xabar yuborish."""
+    try:
+        from sqlalchemy import select
+        from database.models import User, UserRole
+        from config.settings import BOT_TOKEN
+        from aiogram import Bot
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+        r = await db.execute(
+            select(User).where(
+                User.role.in_([UserRole.admin, UserRole.superadmin]),
+                User.is_active == True,
+            )
+        )
+        admins = r.scalars().all()
+        if not admins:
+            return
+
+        name_full = product.name
+        if product.razmer:   name_full += f" | {product.razmer}"
+        if product.razmer_tur: name_full += f" | {product.razmer_tur}"
+        if product.rang:     name_full += f" | {product.rang}"
+
+        text = (
+            f"⚠️ <b>Mahsulot tugadi!</b>\n\n"
+            f"📦 {name_full}\n\n"
+            f"Bu mahsulot:"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Kerak, saqlansin",  callback_data=f"zero_keep_{product.id}")],
+            [InlineKeyboardButton(text="❌ Keraksiz, o'chirilsin", callback_data=f"zero_delete_{product.id}")],
+        ])
+
+        bot = Bot(token=BOT_TOKEN)
+        for adm in admins:
+            try:
+                await bot.send_message(adm.telegram_id, text, parse_mode="HTML", reply_markup=kb)
+            except Exception as e:
+                logger.warning("Admin xabar yuborilmadi %s: %s", adm.telegram_id, e)
+        await bot.session.close()
+    except Exception as e:
+        logger.error("Zero notify xato: %s", e)
 
 
 async def _kirim(
