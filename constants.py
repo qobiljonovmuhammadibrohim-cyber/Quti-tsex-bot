@@ -221,3 +221,64 @@ QISM_ICONS = {
     "yon":   "↔️",
     "paddo": "🔲",
 }
+
+# ═══ NARX VARIANTLARI ════════════════════════════════════════════════════════
+# Har bir ish turi uchun qanday narx variantlari borligini belgilaydi.
+# razmer_turi maydoniga shu qiymatlar yoziladi.
+
+PRICE_VARIANTS = {
+    # 3 xil — razmer bo'yicha (Katta / O'rta / Kichik)
+    "tiger_kesish":    ["Katta", "O'rta", "Kichik"],
+    "laminatsiya":     ["Katta", "O'rta", "Kichik"],
+    "zagatovka":       ["Katta", "O'rta", "Kichik"],
+    "stepler_tikish":  ["Katta", "O'rta", "Kichik"],
+    "yopishtirma":     ["Katta", "O'rta", "Kichik"],
+
+    # 6 xil — razmer × sloy (gofra kley)
+    "gofra_kiley":     ["Katta 3sloy", "O'rta 3sloy", "Kichik 3sloy",
+                        "Katta 5sloy", "O'rta 5sloy", "Kichik 5sloy"],
+
+    # 1 xil — o'zgarmaydi
+    "gofra_ishlab":    ["Standart"],
+    "list_qogoz":      ["Standart"],
+    "rulon_orash":     ["Standart"],
+    "rulonga_salafan": ["Standart"],
+    "diplomat_tikish": ["Standart"],  # faqat tepa tikiladi
+
+    # Adyol tikish — 3 qism (tepa / past / yon)
+    "adyol_tikish":    ["Tepa", "Past", "Yon"],
+
+    # Adyol qoqish — 3 xom + kapalak + yig'ish
+    "adyol_qoqish":    ["Tepa xom", "Past xom", "Yon xom", "Kapalak", "Yig'ish"],
+
+    # Pastel qoqish — 2 xom + kapalak + yig'ish
+    "pastel_qoqish":   ["Tepa xom", "Past xom", "Kapalak", "Yig'ish"],
+}
+
+# Ish turi nomlari (chiroyli ko'rsatish uchun)
+WORK_TYPE_NAMES = {
+    "tiger_kesish":    "✂️ Tiger kesish",
+    "laminatsiya":     "✨ Laminatsiya",
+    "zagatovka":       "📦 Zagatovka",
+    "stepler_tikish":  "📌 Stepler tikish",
+    "yopishtirma":     "🔗 Yopishtirma",
+    "gofra_kiley":     "🔨 Gofra kley",
+    "gofra_ishlab":    "📐 Gofra ishlab chiqarish",
+    "list_qogoz":      "📄 List qog'oz kesish",
+    "rulon_orash":     "🌀 Rulon o'rash",
+    "rulonga_salafan": "🎁 Rulonga salafan",
+    "diplomat_tikish": "💼 Diplomat/Pastel tikish",
+    "adyol_tikish":    "🧵 Adyol tikish",
+    "adyol_qoqish":    "🛏 Adyol qoqish",
+    "pastel_qoqish":   "📫 Pastel qoqish",
+}
+
+
+def get_variants(work_type_value: str) -> list:
+    """Ish turi uchun narx variantlarini qaytaradi."""
+    return PRICE_VARIANTS.get(work_type_value, ["Standart"])
+
+
+def get_work_name(work_type_value: str) -> str:
+    """Ish turi nomini qaytaradi."""
+    return WORK_TYPE_NAMES.get(work_type_value, work_type_value.replace("_", " ").title())

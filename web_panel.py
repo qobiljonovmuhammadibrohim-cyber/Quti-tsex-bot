@@ -2527,7 +2527,7 @@ async def warehouse(request: web.Request):
   <button class="btn btn-g btn-xs" onclick="openKirim({p.id}, '{h(p.name)}', '{h(p.birlik)}')">+Kirim</button>
   <button class="btn btn-d btn-xs" onclick="openChiqim({p.id}, '{h(p.name)}', {p.miqdor}, '{h(p.birlik)}')">-Chiqim</button>
   <button class="btn btn-cy btn-xs" onclick="openThresh({p.id}, '{h(p.name)}', {p.min_threshold}, {p.yellow_threshold})">⚙️</button>
-  <button class="btn btn-d btn-xs" onclick="deleteProduct({p.id}, '{h(p.name)}')" title="Mahsulotni o'chirish">🗑</button>
+  <a href="/web/warehouse/delete-confirm/{p.id}" class="btn btn-d btn-xs" title="O'chirish" onclick="return confirm('Ushbu mahsulotni butunlay ochirmoqchimisiz?')">🗑</a>
 </td>
 </tr>"""
 
@@ -2722,19 +2722,19 @@ async def warehouse(request: web.Request):
 </div>
 """
     js = """
-function deleteProduct(id, nom) {
-  if (!confirm('"' + nom + '" mahsulotini butunlay o\'chirmoqchimisiz?\n\nBu amalni qaytarib bo\'lmaydi!')) return;
+function deleteProduct(id) {
+  if (!confirm("Ushbu mahsulotni butunlay ochirmoqchimisiz? Bu amalni qaytarib bolmaydi!")) return;
   fetch('/web/warehouse/delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({product_id: id})
   })
-  .then(r => r.json())
-  .then(d => {
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
     if (d.ok) { location.reload(); }
     else { alert('Xato: ' + (d.error || 'nomalum')); }
   })
-  .catch(e => alert('Tarmoq xatosi: ' + e));
+  .catch(function(e) { alert('Tarmoq xatosi: ' + e); });
 }
 
 function openKirim(id, name, birlik) {
@@ -3244,6 +3244,27 @@ async def warehouse_zero_keep(request: web.Request):
         p.zero_notified = False
         await db.commit()
     return web.json_response({"ok": True})
+
+
+
+
+@_require_auth
+async def warehouse_delete_confirm(request: web.Request):
+    """Mahsulotni o'chirish (GET link orqali) — keyin warehouse ga qaytadi."""
+    try:
+        pid = int(request.match_info.get("id", "0"))
+    except ValueError:
+        pid = 0
+    cat = request.query.get("cat", "")
+    async with AsyncSessionLocal() as db:
+        p = await db.get(WarehouseProduct, pid)
+        if p:
+            p.is_active = False
+            await db.commit()
+    # Qaysi kategoriyaga qaytish
+    if cat:
+        raise web.HTTPFound(f"/web/warehouse?cat={cat}")
+    raise web.HTTPFound("/web/warehouse")
 
 
 @_require_auth
@@ -7155,6 +7176,7 @@ def create_app() -> web.Application:
     app.router.add_get("/web/warehouse/export",       warehouse_export)
     app.router.add_get("/web/warehouse/logs",         warehouse_logs)
     app.router.add_post("/web/warehouse/delete",      warehouse_delete)
+    app.router.add_get("/web/warehouse/delete-confirm/{id}", warehouse_delete_confirm)
     app.router.add_get("/web/zero-stock",             zero_stock_page)
     app.router.add_post("/web/warehouse/zero-keep",   warehouse_zero_keep)
 
