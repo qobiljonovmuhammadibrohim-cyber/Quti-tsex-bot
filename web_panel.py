@@ -5658,101 +5658,104 @@ async def salary_confirm_all(request: web.Request):
 
 @_require_auth
 async def prices(request: web.Request):
+    """Narxlar — har ish turi va variant uchun alohida narx + saqlash."""
+    from constants import get_variants, get_work_name
+
     async with AsyncSessionLocal() as db:
         all_prices = await get_all_prices(db)
-    price_dict = {}
+
+    price_map = {}
     for p in all_prices:
-        wt = p.work_type.value if hasattr(p.work_type, 'value') else str(p.work_type)
-        price_dict.setdefault(wt, []).append(p)
-    rows = ""
+        wt = p.work_type.value if hasattr(p.work_type, "value") else str(p.work_type)
+        rt = (p.razmer_turi or "Standart")
+        price_map[(wt, rt)] = p.narx
+
+    parts = []
+    parts.append('<h1 style="margin-bottom:4px">Narxlar</h1>')
+    parts.append('<p style="color:var(--muted);margin-bottom:20px">Har ish turi va razmer uchun alohida narx belgilang</p>')
+
     for wt in WorkType:
         wt_val = wt.value
-        wt_label = WORK_TYPE_LABELS.get(wt_val, wt_val)
-        plist = price_dict.get(wt_val, [])
-        if plist:
-            for p in plist:
-                rzm = h(p.razmer_turi) if p.razmer_turi else "asosiy"
-                rows += f"""<tr>
-<td><strong>{h(wt_label)}</strong></td>
-<td class="tag">{rzm}</td>
-<td class="td-n cv-green fw7">{fmt(p.narx)} so'm</td>
-<td class="t-xs t-muted">{h(p.birlik or 'dona')}</td>
-<td>
-  <button class="btn btn-w btn-xs" onclick="openEditPrice('{h(wt_val)}', '{h(wt_label)}', '{h(p.razmer_turi or '')}', {p.narx})">✏️ Tahrir</button>
-</td>
-</tr>"""
-        else:
-            rows += f"""<tr>
-<td><strong>{h(wt_label)}</strong></td>
-<td class="tag t-muted">asosiy</td>
-<td class="t-muted t-xs">narx yo'q</td>
-<td></td>
-<td>
-  <button class="btn btn-p btn-xs" onclick="openEditPrice('{h(wt_val)}', '{h(wt_label)}', '', 0)">➕ Qo'shish</button>
-</td>
-</tr>"""
+        variants = get_variants(wt_val)
+        wt_name = get_work_name(wt_val)
 
-    wt_opts = ''.join(
-        f'<option value="{wt.value}">{h(WORK_TYPE_LABELS.get(wt.value, wt.value))}</option>'
-        for wt in WorkType
-    )
-    content = f"""
-<div class="card-hd" style="margin-bottom:11px">
-  <span class="card-title">⚙️ Narxlar boshqaruvi</span>
-  <button class="btn btn-p btn-sm" onclick="openModal('modal-price')">➕ Yangi narx</button>
-</div>
-<div class="card" style="padding:0">
-  <div class="tbl-wrap">
-    <table>
-      <thead><tr><th>Ish turi</th><th>Razmer/tur</th><th>Narx</th><th>Birlik</th><th>Amal</th></tr></thead>
-      <tbody>{rows}</tbody>
-    </table>
-  </div>
-</div>
+        parts.append('<div class="card" style="margin-bottom:14px">')
+        parts.append('<h2 style="margin-bottom:12px">' + wt_name + '</h2>')
 
-<div class="overlay" id="modal-price" onclick="if(event.target===this)closeModal('modal-price')">
-  <div class="modal">
-    <div class="modal-title" id="price-modal-title">Narx o'rnatish</div>
-    <form method="POST" action="/web/prices/set">
-      <div class="fg">
-        <label class="fl">Ish turi *</label>
-        <select name="work_type" id="price-wt" required>{wt_opts}</select>
-      </div>
-      <div class="fg">
-        <label class="fl">Razmer/tur (ixtiyoriy)</label>
-        <input type="text" name="razmer_turi" id="price-rzm" placeholder="masalan: Katta, yoki 3, 5">
-        <div class="input-hint">Bo'sh qoldiring — asosiy narx uchun</div>
-      </div>
-      <div class="fg">
-        <label class="fl">Narx (so'm) *</label>
-        <input type="number" name="narx" id="price-narx" required min="0" step="100">
-      </div>
-      <div class="fg">
-        <label class="fl">Birlik</label>
-        <select name="birlik">
-          <option value="dona">dona</option>
-          <option value="kg">kg</option>
-          <option value="m²">m²</option>
-        </select>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-s" onclick="closeModal('modal-price')">Bekor</button>
-        <button type="submit" class="btn btn-p">💾 Saqlash</button>
-      </div>
-    </form>
-  </div>
-</div>
-"""
+        for variant in variants:
+            current = price_map.get((wt_val, variant), 0)
+            current_str = str(int(current)) if current else ""
+            input_id = ("price_" + wt_val + "_" + variant).replace(" ", "_").replace("'", "")
+            row = '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">'
+            row += '<div style="flex:0 0 160px;font-weight:600;font-size:13px">' + variant + '</div>'
+            row += '<input type="number" id="' + input_id + '" value="' + current_str + '" placeholder="narx" style="flex:1;max-width:180px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--fg)">'
+            row += '<span style="color:var(--muted);font-size:13px">som</span>'
+            row += '<button class="btn btn-cy btn-xs" onclick="savePrice(\'' + wt_val + '\', \'' + variant + '\', \'' + input_id + '\')">Saqlash</button>'
+            row += '</div>'
+            parts.append(row)
+
+        parts.append('</div>')
+
     js = """
-function openEditPrice(wt, label, rzm, narx) {
-  document.getElementById('price-modal-title').textContent = '✏️ ' + label;
-  document.getElementById('price-wt').value = wt;
-  document.getElementById('price-rzm').value = rzm;
-  document.getElementById('price-narx').value = narx;
-  openModal('modal-price');
+<script>
+function savePrice(workType, variant, inputId) {
+  var val = document.getElementById(inputId).value;
+  if (val === "" || isNaN(val)) { alert("Narx kiriting"); return; }
+  var btn = event.target;
+  fetch('/web/prices/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({work_type: workType, variant: variant, narx: parseFloat(val)})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) {
+      var old = btn.textContent;
+      btn.textContent = "Saqlandi";
+      btn.style.background = "#10b981";
+      setTimeout(function(){ btn.textContent = old; btn.style.background = ""; }, 1500);
+    } else { alert("Xato: " + (d.error || "?")); }
+  })
+  .catch(function(e){ alert("Tarmoq xatosi: " + e); });
 }
+</script>
 """
-    return web.Response(text=_base("⚙️ Narxlar", "prices", content, js), content_type="text/html")
+    parts.append(js)
+    content = "\n".join(parts)
+    return web.Response(text=_base("Narxlar", "prices", content), content_type="text/html")
+
+
+@_require_auth
+async def prices_save(request: web.Request):
+    """Narxni saqlash (work_type + variant)."""
+    try:
+        data = await request.json()
+        wt_val  = data["work_type"]
+        variant = data["variant"]
+        narx    = float(data["narx"])
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)})
+
+    db_variant = None if variant == "Standart" else variant
+
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import select
+        wt_enum = WorkType(wt_val)
+        r = await db.execute(
+            select(WorkPrice).where(
+                WorkPrice.work_type == wt_enum,
+                WorkPrice.razmer_turi == db_variant,
+            )
+        )
+        existing = r.scalar_one_or_none()
+        if existing:
+            existing.narx = narx
+            existing.is_active = True
+        else:
+            db.add(WorkPrice(work_type=wt_enum, razmer_turi=db_variant, narx=narx, is_active=True))
+        await db.commit()
+    return web.json_response({"ok": True})
+
 
 async def prices_set(request: web.Request):
     data = await request.post()
@@ -7206,6 +7209,7 @@ def create_app() -> web.Application:
     # Prices
     app.router.add_get("/web/prices",                 prices)
     app.router.add_post("/web/prices/set",            prices_set)
+    app.router.add_post("/web/prices/save",           prices_save)
 
     # Root redirect
     app.router.add_get("/", lambda r: web.HTTPFound("/web/"))
