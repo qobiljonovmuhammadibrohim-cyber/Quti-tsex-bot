@@ -8,6 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config.settings import BOT_TOKEN
 from database.db import init_db
 from bot.middlewares.db_middleware import DbSessionMiddleware
+from bot.middlewares.state_reset_middleware import StateResetMiddleware
 from bot.handlers import start, warehouse, worker, inspector, admin, reports_handler, orders, goals
 from bot.handlers.search import router as search_router
 from utils.scheduler import setup_scheduler
@@ -29,6 +30,7 @@ async def main():
     bot = Bot(token=BOT_TOKEN)
     dp  = Dispatcher(storage=_get_storage())
     dp.update.middleware(DbSessionMiddleware())
+    dp.message.outer_middleware(StateResetMiddleware())
     dp.include_router(start.router)
     dp.include_router(warehouse.router)
     dp.include_router(worker.router)

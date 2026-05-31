@@ -13,6 +13,37 @@ from aiogram.types import (
 from database.models import UserRole
 
 
+# Barcha asosiy menyu tugmalari (FSM holatdan chiqish uchun)
+MAIN_MENU_BUTTONS = {
+    # Ishchi
+    "Smena boshlash", "Smena tugatish", "Ish kiritish", "⚡ Tez kiritish",
+    "Bugungi daromad", "Bugungi ishlarim", "Ish ozgartirish", "Oylik maosh",
+    "📋 Davomat", "📅 Mening davomatim", "Mening jarimalarim", "Kabinet",
+    "👤 Mening kabinetim", "🎯 Maqsadim",
+    # Nazoratchi
+    "📊 Dashboard", "⚡ Batch tasdiqlash", "Tekshiruv boshlash", "Bugungi holat",
+    "Ishchilar holati", "Ombor holati", "Tekshiruv hisoboti", "Smena holati",
+    "Reyting", "Sifat hisoboti", "📊 Davomat hisoboti",
+    # Omborchi
+    "Kirim", "Chiqim", "Ombor qoldighi", "Mahsulot qidirish", "🌀 Rulonlar",
+    "📋 Gofralar", "🧩 Yarim tayyor", "🔲 Qoliplar", "✂️ Zagatovka",
+    "🖨️ Xromazeslar", "✨ Laminat xromazes", "🧩 Adyol zapchast",
+    "🔧 Stanok ehtiyot", "Transfer (zanjir)", "Inventarizatsiya",
+    "Buyurtma royxati", "Ombor hisoboti", "Mahsulot tarixi", "Mahsulot tahrirlash",
+    # Admin
+    "Ombor", "Ishchilar", "Hisobotlar", "Maosh", "Narxlar", "Jarimalar",
+    "🔄 Yangi oy boshlash", "📄 PDF hisobotlar", "Web panel", "📋 Buyurtmalar",
+    "🩺 Tizim holati", "🎯 Maqsadlar", "Foydalanuvchi qoshish",
+    # Umumiy
+    "Menyu",
+}
+
+
+def is_main_menu_button(text):
+    """Matn asosiy menyu tugmasimi?"""
+    return text in MAIN_MENU_BUTTONS
+
+
 def get_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
     if role == UserRole.ishchi:
         buttons = [
