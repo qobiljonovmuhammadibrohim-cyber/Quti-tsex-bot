@@ -20,6 +20,14 @@ from database.models import (
     ProductCategory, WarehouseProduct,
 )
 from database.queries import get_user, get_price, get_users_by_role
+
+def _qism_variant(qism, suffix=""):
+    """qism (tepa/past/yon) -> variant nomi (Tepa/Past/Yon yoki 'Tepa xom')."""
+    m = {"tepa": "Tepa", "past": "Past", "yon": "Yon", "paddo": "Paddo"}
+    base = m.get((qism or "").lower(), (qism or "").capitalize() or "Standart")
+    return (base + " " + suffix).strip() if suffix else base
+
+
 from utils.warehouse_ops import run_warehouse_ops
 
 logger = logging.getLogger(__name__)
@@ -322,7 +330,7 @@ async def at_src(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     pid = int(cb.data[7:])
     p   = await db.get(WarehouseProduct, pid)
     if not p: await cb.answer("Topilmadi"); return
-    narx = (await get_price(db, WorkType.adyol_tikish, p.razmer_tur)) or 0
+    narx = (await get_price(db, WorkType.adyol_tikish, _qism_variant(p.qism))) or 0
     await state.update_data(
         src_product_id=pid, mahsulot_nomi=p.name,
         razmer=p.razmer or "", rang=p.rang or "",
@@ -385,7 +393,7 @@ async def dt_src(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     pid = int(cb.data[7:])
     p   = await db.get(WarehouseProduct, pid)
     if not p: await cb.answer("Topilmadi"); return
-    narx = (await get_price(db, WorkType.diplomat_tikish, p.razmer_tur)) or 0
+    narx = (await get_price(db, WorkType.diplomat_tikish, None)) or 0
     await state.update_data(
         src_product_id=pid, mahsulot_nomi=p.name,
         razmer=p.razmer or "", rang=p.rang or "",
@@ -459,7 +467,7 @@ async def aq_xom(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 
 @router.callback_query(F.data == "aqtur_kapalak", AP.aq_tur)
 async def aq_kapalak(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    narx = (await get_price(db, WorkType.adyol_qoqish, "kapalak")) or 0
+    narx = (await get_price(db, WorkType.adyol_qoqish, "Kapalak")) or 0
     await state.update_data(tur="kapalak", birlik_narx=narx, dest_tur="kapalak")
     has = await _show_grouped_sets(
         cb, state, db, "xom_komple",
@@ -518,7 +526,7 @@ async def aq_grp_select(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 
 @router.callback_query(F.data == "aqtur_yigish", AP.aq_tur)
 async def aq_yigish(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    narx = (await get_price(db, WorkType.adyol_qoqish, "yigish")) or 0
+    narx = (await get_price(db, WorkType.adyol_qoqish, "Yig'ish")) or 0
     await state.update_data(tur="yigish", birlik_narx=narx, dest_tur=None, is_tayyor=True)
     has = await _show_grouped_sets(
         cb, state, db, "kapalak",
@@ -541,8 +549,16 @@ async def aq_src(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
         try:
             p = await db.get(WarehouseProduct, int(raw))
             if p:
-                await state.update_data(src_product_id=p.id, mahsulot_nomi=p.name,
-                                        razmer=p.razmer or "", rang=p.rang or "")
+                upd = {"src_product_id": p.id, "mahsulot_nomi": p.name,
+                       "razmer": p.razmer or "", "rang": p.rang or ""}
+                # XOM qoqishda narx qismga qarab (Tepa xom / Past xom / Yon xom)
+                cur_tur = (await state.get_data()).get("tur", "")
+                if cur_tur == "xom_komple" and p.qism:
+                    variant = _qism_variant(p.qism, "xom")
+                    xom_narx = await get_price(db, WorkType.adyol_qoqish, variant)
+                    if xom_narx:
+                        upd["birlik_narx"] = xom_narx
+                await state.update_data(**upd)
                 await cb.message.answer(f"📦 {_label(p)}")
         except (ValueError, Exception):
             await cb.answer("Xato"); return
@@ -668,7 +684,7 @@ async def pq_xom(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 
 @router.callback_query(F.data == "pqtur_kapalak", AP.pq_tur)
 async def pq_kapalak(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    narx = (await get_price(db, WorkType.pastel_qoqish, "kapalak")) or 0
+    narx = (await get_price(db, WorkType.pastel_qoqish, "Kapalak")) or 0
     await state.update_data(tur="kapalak", birlik_narx=narx, dest_tur="kapalak")
     has = await _show_grouped_sets(
         cb, state, db, "xom_komple",
@@ -725,7 +741,7 @@ async def pq_grp_select(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 
 @router.callback_query(F.data == "pqtur_yigish", AP.pq_tur)
 async def pq_yigish(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    narx = (await get_price(db, WorkType.pastel_qoqish, "yigish")) or 0
+    narx = (await get_price(db, WorkType.pastel_qoqish, "Yig'ish")) or 0
     await state.update_data(tur="yigish", birlik_narx=narx, dest_tur=None, is_tayyor=True)
     # Yigish ham grouped — kapalak bo'limidan
     has = await _show_grouped_sets(
@@ -749,8 +765,16 @@ async def pq_src(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
         try:
             p = await db.get(WarehouseProduct, int(raw))
             if p:
-                await state.update_data(src_product_id=p.id, mahsulot_nomi=p.name,
-                                        razmer=p.razmer or "", rang=p.rang or "")
+                upd = {"src_product_id": p.id, "mahsulot_nomi": p.name,
+                       "razmer": p.razmer or "", "rang": p.rang or ""}
+                # XOM qoqishda narx qismga qarab (Tepa xom / Past xom / Yon xom)
+                cur_tur = (await state.get_data()).get("tur", "")
+                if cur_tur == "xom_komple" and p.qism:
+                    variant = _qism_variant(p.qism, "xom")
+                    xom_narx = await get_price(db, WorkType.pastel_qoqish, variant)
+                    if xom_narx:
+                        upd["birlik_narx"] = xom_narx
+                await state.update_data(**upd)
                 await cb.message.answer(f"📦 {_label(p)}")
         except (ValueError, Exception):
             await cb.answer("Xato"); return

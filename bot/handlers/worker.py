@@ -1308,8 +1308,12 @@ async def gk_soni(m: Message, state: FSMContext, db: AsyncSession):
     data   = await state.get_data()
     sloy   = str(data.get("sloy", "3"))
     razmer = data.get("razmer", "")
-    # Narx sloy bo'yicha olinadi (razmer_turi = sloy qiymati)
-    narx   = await get_price(db, WorkType.gofra_kiley, sloy)
+    # Narx razmer + sloy kombinatsiyasi bo'yicha: "Katta 3sloy"
+    variant = f"{razmer} {sloy}sloy" if razmer else f"{sloy}sloy"
+    narx   = await get_price(db, WorkType.gofra_kiley, variant)
+    if not narx:
+        # Eski format bilan ham urinib ko'rish (orqaga moslik)
+        narx = await get_price(db, WorkType.gofra_kiley, sloy)
     await _confirm_screen(
         m, state, WorkType.gofra_kiley.value, "Gofra Kiley",
         [
