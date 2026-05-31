@@ -7037,10 +7037,10 @@ async def analytics_page(request: web.Request):
         diff_color = "#34d399" if diff_summa >= 0 else "#f87171"
         diff_sign = "+" if diff_summa >= 0 else ""
 
-        initials = "".join([w[0].upper() for w in name.split()[:2]])
+        initials = "".join([w[0].upper() for w in (name or "?").split()[:2]]) or "?"
 
         workers_html += f'''
-        <div class="list-item" onclick="location.href=\'/web/workers/{uid}/report\'">
+        <div class="list-item" onclick="location.href=\'/web/workers/{uid}\'">
           <div style="display:flex;align-items:center;gap:12px">
             <div class="avatar">{initials}</div>
             <div style="flex:1">
