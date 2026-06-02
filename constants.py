@@ -243,6 +243,7 @@ PRICE_VARIANTS = {
     "list_qogoz":      ["Standart"],
     "rulon_orash":     ["Standart"],
     "rulonga_salafan": ["Standart"],
+    "rulon_ishlab":    ["Standart"],   # rulon ishlab chiqarish
     "diplomat_tikish": ["Standart"],  # faqat tepa tikiladi
 
     # Adyol tikish — 3 qism (tepa / past / yon)
@@ -267,6 +268,7 @@ WORK_TYPE_NAMES = {
     "list_qogoz":      "📄 List qog'oz kesish",
     "rulon_orash":     "🌀 Rulon o'rash",
     "rulonga_salafan": "🎁 Rulonga salafan",
+    "rulon_ishlab":    "🌀 Rulon ishlab chiqarish",
     "diplomat_tikish": "💼 Diplomat/Pastel tikish",
     "adyol_tikish":    "🧵 Adyol tikish",
     "adyol_qoqish":    "🛏 Adyol qoqish",

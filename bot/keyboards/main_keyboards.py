@@ -17,6 +17,7 @@ from database.models import UserRole
 MAIN_MENU_BUTTONS = {
     # Ishchi
     "Smena boshlash", "Smena tugatish", "Ish kiritish", "⚡ Tez kiritish",
+    "📌 Topshiriqlarim",
     "Bugungi daromad", "Bugungi ishlarim", "Ish ozgartirish", "Oylik maosh",
     "📋 Davomat", "📅 Mening davomatim", "Mening jarimalarim", "Kabinet",
     "👤 Mening kabinetim", "🎯 Maqsadim",
@@ -49,6 +50,7 @@ def is_main_menu_button(text):
 def get_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
     if role == UserRole.ishchi:
         buttons = [
+            [KeyboardButton(text="📌 Topshiriqlarim")],
             [KeyboardButton(text="Smena boshlash"),      KeyboardButton(text="Smena tugatish")],
             [KeyboardButton(text="Ish kiritish"),         KeyboardButton(text="⚡ Tez kiritish")],
             [KeyboardButton(text="Bugungi daromad"),      KeyboardButton(text="Bugungi ishlarim")],
@@ -171,6 +173,9 @@ def get_work_type_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text="🛏 Adyol qoqish",           callback_data="work_adyol_qoqish"),
             InlineKeyboardButton(text="📫 Pastel qoqish",          callback_data="work_pastel_qoqish"),
+        ],
+        [
+            InlineKeyboardButton(text="🌀 Rulon ishlab chiqarish", callback_data="work_rulon_ishlab"),
         ],
         [InlineKeyboardButton(text="❌ Bekor qilish",              callback_data="cancel")],
     ])

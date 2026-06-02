@@ -37,6 +37,10 @@ async def migrate():
     conn = await asyncpg.connect(url)
 
     migrations = [
+        (
+            "worktype_rulon_ishlab",
+            "ALTER TYPE worktype ADD VALUE IF NOT EXISTS 'rulon_ishlab';",
+        ),
         # ── warehouse_products yangi ustunlar ──────────────────────────────
         (
             "razmer_tur",
@@ -64,6 +68,28 @@ async def migrate():
             """
             ALTER TABLE warehouse_products
             ADD COLUMN IF NOT EXISTS yonalish VARCHAR(20);
+            """,
+        ),
+        (
+            "topshiriqlar",
+            """
+            CREATE TABLE IF NOT EXISTS topshiriqlar (
+                id            SERIAL PRIMARY KEY,
+                worker_id     INTEGER NOT NULL REFERENCES users(id),
+                admin_id      INTEGER REFERENCES users(id),
+                work_type     VARCHAR(50) NOT NULL,
+                razmer_turi   VARCHAR(100),
+                target_soni   FLOAT NOT NULL DEFAULT 0,
+                done_soni     FLOAT NOT NULL DEFAULT 0,
+                product_id    INTEGER REFERENCES warehouse_products(id),
+                deadline      DATE,
+                status        VARCHAR(20) NOT NULL DEFAULT 'tayinlangan',
+                izoh          TEXT,
+                work_entry_id INTEGER REFERENCES work_entries(id),
+                created_at    TIMESTAMP DEFAULT NOW(),
+                updated_at    TIMESTAMP,
+                completed_at  TIMESTAMP
+            );
             """,
         ),
         (

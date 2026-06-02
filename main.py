@@ -18,6 +18,8 @@ from bot.handlers.transfer import router as tr_router
 from bot.handlers.qolip import router as qolip_router
 from bot.handlers.attendance import router as att_router
 from bot.handlers.worker_cabinet import router as cab_router
+from bot.handlers.worker_topshiriq import router as task_router
+from bot.handlers.worker_rulon import router as rulon_router
 from bot.handlers.month_reset import router as reset_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -32,6 +34,8 @@ async def main():
     dp.update.middleware(DbSessionMiddleware())
     dp.message.outer_middleware(StateResetMiddleware())
     dp.include_router(start.router)
+    dp.include_router(task_router)
+    dp.include_router(rulon_router)
     dp.include_router(warehouse.router)
     dp.include_router(worker.router)
     dp.include_router(inspector.router)

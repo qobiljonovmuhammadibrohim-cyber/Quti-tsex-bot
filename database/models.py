@@ -96,6 +96,7 @@ class WorkType(str, enum.Enum):
     diplomat_tikish = "diplomat_tikish"
     adyol_qoqish    = "adyol_qoqish"
     pastel_qoqish   = "pastel_qoqish"
+    rulon_ishlab    = "rulon_ishlab"   # rulon ishlab chiqarish (zanjir boshi)
 
 
 
@@ -485,3 +486,34 @@ class Goal(Base):
     is_active   = Column(Boolean, default=True)
     notes       = Column(Text, nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class TopshiriqStatus(str, enum.Enum):
+    """Topshiriq holati."""
+    tayinlangan = "tayinlangan"   # admin berdi, ishchi hali boshlamagan
+    qisman      = "qisman"        # ishchi qisman bajardi, admin qarori kutilmoqda
+    bajarilgan  = "bajarilgan"    # to'liq bajarildi
+    yakunlangan = "yakunlangan"   # admin yopdi
+    bekor       = "bekor"         # bekor qilindi
+
+
+class Topshiriq(Base):
+    """Admin tomonidan ishchiga berilgan topshiriq (vazifa)."""
+    __tablename__ = "topshiriqlar"
+
+    id            = Column(Integer, primary_key=True)
+    worker_id     = Column(Integer, ForeignKey("users.id"), nullable=False)
+    admin_id      = Column(Integer, ForeignKey("users.id"), nullable=True)
+    work_type     = Column(Enum(WorkType), nullable=False)
+    razmer_turi   = Column(String(100), nullable=True)   # Katta/O'rta/Kichik yoki variant
+    target_soni   = Column(Float, nullable=False, default=0)   # reja miqdori
+    done_soni     = Column(Float, nullable=False, default=0)   # bajarilgan miqdor
+    product_id    = Column(Integer, ForeignKey("warehouse_products.id"), nullable=True)  # bog'langan material
+    deadline      = Column(Date, nullable=True)
+    status        = Column(Enum(TopshiriqStatus), default=TopshiriqStatus.tayinlangan, nullable=False)
+    izoh          = Column(Text, nullable=True)
+    work_entry_id = Column(Integer, ForeignKey("work_entries.id"), nullable=True)  # bajarilganda yaratilgan ish
+    created_at    = Column(DateTime, server_default=func.now())
+    updated_at    = Column(DateTime, onupdate=func.now())
+    completed_at  = Column(DateTime, nullable=True)
+
