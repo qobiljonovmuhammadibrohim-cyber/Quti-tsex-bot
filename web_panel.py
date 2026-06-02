@@ -62,7 +62,7 @@ def _normalize_razmer(val) -> str | None:
 
 from database.db import AsyncSessionLocal
 from database.models import (
-    User, UserRole, WarehouseProduct, WarehouseLog, ProductCategory, WorkEntry, WorkStatus, WorkType, WorkPrice, SalaryReport, Penalty, PenaltyType, Advance, Attendance, AttendanceType, WorkSession,
+    User, UserRole, WarehouseProduct, WarehouseLog, ProductCategory, WorkEntry, WorkStatus, WorkType, WorkPrice, SalaryReport, Penalty, PenaltyType, Advance, Attendance, AttendanceType, WorkSession, QualityGrade,
 )
 from database.queries import (
     get_all_active_users, get_users_by_role,
@@ -442,19 +442,59 @@ def _check_session(request: web.Request) -> bool:
         return False
     return True
 
+def _current(request: web.Request) -> dict:
+    """Joriy sessiya ma'lumoti: {user_id, role} yoki {}."""
+    token = request.cookies.get("wpsession")
+    if not token:
+        return {}
+    return _sessions.get(token, {})
+
 def _require_auth(handler):
-    """Decorator — barcha sahifalar uchun auth tekshiruvi."""
+    """Decorator — kirish tekshiruvi (har qanday rol)."""
     async def wrapper(request: web.Request):
         if not _check_session(request):
             raise web.HTTPFound("/web/login")
         return await handler(request)
     return wrapper
 
+def _require_role(*allowed_roles):
+    """Decorator — faqat ruxsat etilgan rollar uchun.
+    allowed_roles: 'admin', 'omborchi', 'nazoratchi' ...
+    Admin/superadmin doim ruxsat etiladi."""
+    def deco(handler):
+        async def wrapper(request: web.Request):
+            if not _check_session(request):
+                raise web.HTTPFound("/web/login")
+            sess = _current(request)
+            role = sess.get("role", "")
+            if role in ("admin", "superadmin"):
+                return await handler(request)
+            if allowed_roles and role not in allowed_roles:
+                # Ruxsat yo'q — o'z paneliga yo'naltirish
+                raise web.HTTPFound(_role_home(role))
+            return await handler(request)
+        return wrapper
+    return deco
+
+def _role_home(role: str) -> str:
+    """Rolga mos bosh sahifa."""
+    return {
+        "omborchi":   "/web/ombor-panel",
+        "nazoratchi": "/web/inspektor-panel",
+        "admin":      "/web/",
+        "superadmin": "/web/",
+    }.get(role, "/web/login")
 
 
-def _base(title: str, active: str, content: str, extra_js: str = "") -> str:
+
+def _base(title: str, active: str, content: str, extra_js: str = "", role: str = "admin") -> str:
     nav_items = [
         ("dashboard",        "🏠", "Bosh sahifa",      "/web/"),
+        ("ombor-home",       "🏠", "Ombor bosh",       "/web/ombor-panel"),
+        ("ombor-ops",        "➕", "Kirim/Chiqim",     "/web/ombor-panel/operatsiya"),
+        ("insp-home",        "🏠", "Nazorat bosh",     "/web/inspektor-panel"),
+        ("insp-pending",     "⏳", "Tezkor tasdiq",    "/web/inspektor-panel/pending"),
+        ("insp-review",      "🔍", "Bittalab ko'rish", "/web/inspektor-panel/review"),
         ("production",       "🏭", "Ishlab chiqarish", "/web/production"),
         ("inventory_health", "🏥", "Ombor salomatligi","/web/health"),
         ("zero-stock",       "⚠️", "Tugaganlar",         "/web/zero-stock"),
@@ -489,16 +529,32 @@ def _base(title: str, active: str, content: str, extra_js: str = "") -> str:
         ("analytics",   "📈", "Ishchilar tahlili",  "/web/analytics"),
         ("quick",       "⚡", "Tezkor amallar",     "/web/quick"),
     ]
-    sections = [
-        ("📊 Analytics", ["dashboard", "production", "inventory_health", "activity", "quality"]),
-        ("👥 Xodimlar", ["workers", "avans", "penalties"]),
-        ("Ombor umumiy", ["warehouse", "ombor-logs", "ombor-cats"]),
-        ("Ombor bo'limlari", ["rulon","gofra","zagatovka","xromazes","laminat","yarim","qolip","adyol-zp","stanok-zp"]),
-        ("Moliya", ["salary", "salary_projection", "prices"]),
-        ("Hisobotlar", ["reports", "ombor-report", "maosh-report"]),
-        ("Tahlil", ["stats-adv", "mat-flow", "analytics"]),
-        ("Boshqa", ["quick", "notif", "help", "system"]),
-    ]
+    if role == "omborchi":
+        # Omborchi — faqat ombor bilan bog'liq
+        sections = [
+            ("📦 Ombor", ["ombor-home", "ombor-ops", "warehouse", "zero-stock"]),
+            ("Ombor bo'limlari", ["rulon","gofra","zagatovka","xromazes","laminat","yarim","qolip","adyol-zp","stanok-zp"]),
+            ("📋 Operatsiyalar", ["ombor-logs", "ombor-report"]),
+        ]
+    elif role == "nazoratchi":
+        # Nazoratchi — tekshirish, sifat, ishchilar
+        sections = [
+            ("✅ Nazorat", ["insp-home", "insp-review", "insp-pending", "quality"]),
+            ("👥 Ishchilar", ["workers", "analytics"]),
+            ("📊 Hisobot", ["reports", "activity"]),
+        ]
+    else:
+        # Admin — to'liq
+        sections = [
+            ("📊 Analytics", ["dashboard", "production", "inventory_health", "activity", "quality"]),
+            ("👥 Xodimlar", ["workers", "avans", "penalties"]),
+            ("Ombor umumiy", ["warehouse", "ombor-logs", "ombor-cats"]),
+            ("Ombor bo'limlari", ["rulon","gofra","zagatovka","xromazes","laminat","yarim","qolip","adyol-zp","stanok-zp"]),
+            ("Moliya", ["salary", "salary_projection", "prices"]),
+            ("Hisobotlar", ["reports", "ombor-report", "maosh-report"]),
+            ("Tahlil", ["stats-adv", "mat-flow", "analytics"]),
+            ("Boshqa", ["quick", "notif", "help", "system"]),
+        ]
     ni_map = {k: (ic, lbl, url) for k, ic, lbl, url in nav_items}
     nav_html = ""
     for sec_name, keys in sections:
@@ -3265,6 +3321,685 @@ async def warehouse_delete_confirm(request: web.Request):
     if cat:
         raise web.HTTPFound(f"/web/warehouse?cat={cat}")
     raise web.HTTPFound("/web/warehouse")
+
+
+
+
+@_require_role("omborchi")
+async def ombor_panel(request: web.Request):
+    """Omborchi uchun mukammal bosh sahifa."""
+    sess = _current(request)
+    name = sess.get("name", "Omborchi")
+
+    today = date.today()
+    async with AsyncSessionLocal() as db:
+        # Umumiy KPI
+        r_total = await db.execute(
+            select(func.count(WarehouseProduct.id)).where(WarehouseProduct.is_active == True)
+        )
+        total_prod = int(r_total.scalar() or 0)
+
+        r_low = await db.execute(
+            select(func.count(WarehouseProduct.id)).where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.miqdor <= WarehouseProduct.min_threshold,
+            )
+        )
+        low_n = int(r_low.scalar() or 0)
+
+        r_zero = await db.execute(
+            select(func.count(WarehouseProduct.id)).where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.miqdor <= 0,
+            )
+        )
+        zero_n = int(r_zero.scalar() or 0)
+
+        # Bugungi operatsiyalar
+        r_ops = await db.execute(
+            select(func.count(WarehouseLog.id)).where(
+                func.date(WarehouseLog.created_at) == today
+            )
+        )
+        today_ops = int(r_ops.scalar() or 0)
+
+        # Kategoriyalar bo'yicha
+        r_cats = await db.execute(
+            select(
+                WarehouseProduct.category,
+                func.count(WarehouseProduct.id),
+                sf.sum(sa_case((WarehouseProduct.miqdor <= WarehouseProduct.min_threshold, 1), else_=0)),
+            ).where(WarehouseProduct.is_active == True)
+            .group_by(WarehouseProduct.category)
+        )
+        cats = [(r[0].value if r[0] else "?", int(r[1] or 0), int(r[2] or 0)) for r in r_cats.all()]
+
+        # Kam qolganlar (top 8)
+        r_lowlist = await db.execute(
+            select(WarehouseProduct).where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.miqdor <= WarehouseProduct.min_threshold,
+            ).order_by(WarehouseProduct.miqdor.asc()).limit(8)
+        )
+        low_products = r_lowlist.scalars().all()
+
+        # So'nggi 8 operatsiya
+        r_recent = await db.execute(
+            select(WarehouseLog, WarehouseProduct)
+            .join(WarehouseProduct, WarehouseProduct.id == WarehouseLog.product_id)
+            .order_by(WarehouseLog.created_at.desc()).limit(8)
+        )
+        recent = r_recent.all()
+
+    CAT_LABELS = {
+        "rulon": "🌀 Rulonlar", "gofra": "📋 Go'fralar", "gofra_zagatovka": "✂️ Zagatovka",
+        "xromazes": "🖨 Xromazes", "laminat_xromazes": "✨ Laminat", "yarim_tayyor": "🧩 Yarim tayyor",
+        "qolip": "🔲 Qoliplar", "tayyor_mahsulot": "📦 Tayyor", "adyol_zapchast": "🧩 Adyol zp",
+        "uskuna_zapchast": "🔧 Uskuna zp",
+    }
+
+    p = []
+    # Salom va sana
+    p.append('<div class="ombor-hero">')
+    p.append(f'<div><div class="hero-greet">Assalomu alaykum, {h(name)}!</div>')
+    p.append(f'<div class="hero-date">{today.strftime("%d.%m.%Y")} · Ombor boshqaruvi</div></div>')
+    p.append('<div class="hero-icon">📦</div>')
+    p.append('</div>')
+
+    # KPI kartochkalar
+    p.append('<div class="kpi-grid">')
+    p.append(f'<div class="kpi-card kpi-blue"><div class="kpi-icon">📦</div><div class="kpi-num">{total_prod}</div><div class="kpi-label">Jami mahsulot</div></div>')
+    p.append(f'<div class="kpi-card kpi-orange"><div class="kpi-icon">⚠️</div><div class="kpi-num">{low_n}</div><div class="kpi-label">Kam qolgan</div></div>')
+    p.append(f'<div class="kpi-card kpi-red"><div class="kpi-icon">🚨</div><div class="kpi-num">{zero_n}</div><div class="kpi-label">Tugagan</div></div>')
+    p.append(f'<div class="kpi-card kpi-green"><div class="kpi-icon">📊</div><div class="kpi-num">{today_ops}</div><div class="kpi-label">Bugungi operatsiya</div></div>')
+    p.append('</div>')
+
+    # Tezkor amallar
+    p.append('<div class="quick-row">')
+    p.append('<a href="/web/ombor-panel/operatsiya" class="quick-btn quick-green"><span class="qb-icon">➕</span><span>Kirim/Chiqim</span></a>')
+    p.append('<a href="/web/warehouse" class="quick-btn quick-blue"><span class="qb-icon">🔍</span><span>Qidirish</span></a>')
+    p.append('<a href="/web/zero-stock" class="quick-btn quick-red"><span class="qb-icon">🗑</span><span>Tugaganlar</span></a>')
+    p.append('<a href="/web/warehouse/logs" class="quick-btn quick-purple"><span class="qb-icon">📋</span><span>Tarix</span></a>')
+    p.append('</div>')
+
+    # Kam qolganlar (agar bor bo'lsa) — diqqat tortuvchi
+    if low_products:
+        p.append('<div class="section-card alert-section">')
+        p.append('<div class="section-head"><h2>⚠️ Diqqat — kam qolganlar</h2>')
+        p.append(f'<span class="badge-count">{low_n}</span></div>')
+        p.append('<div class="low-list">')
+        for prod in low_products:
+            nm = h(prod.name)
+            extra = " · ".join(filter(None, [prod.razmer, prod.rang]))
+            extra_h = h(extra) if extra else ""
+            pct = min(100, int((float(prod.miqdor) / max(float(prod.min_threshold or 1), 1)) * 100))
+            p.append('<div class="low-item">')
+            p.append(f'<div class="low-info"><div class="low-name">{nm}</div>')
+            if extra_h: p.append(f'<div class="low-extra">{extra_h}</div>')
+            p.append('</div>')
+            p.append(f'<div class="low-qty">{prod.miqdor:.0f} <span>{prod.birlik or "dona"}</span></div>')
+            p.append('</div>')
+        p.append('</div></div>')
+
+    # Kategoriyalar
+    p.append('<div class="section-card">')
+    p.append('<div class="section-head"><h2>🏭 Ombor bo\'limlari</h2></div>')
+    p.append('<div class="cat-grid">')
+    for cat_key, cnt, low in cats:
+        label = CAT_LABELS.get(cat_key, cat_key)
+        warn = f'<span class="cat-warn">⚠️ {low}</span>' if low else ''
+        p.append(f'<a href="/web/ombor/{cat_key}" class="cat-tile">')
+        p.append(f'<div class="cat-label">{label}</div>')
+        p.append(f'<div class="cat-count">{cnt} <span>mahsulot</span></div>')
+        p.append(f'{warn}</a>')
+    p.append('</div></div>')
+
+    # So'nggi operatsiyalar
+    p.append('<div class="section-card">')
+    p.append('<div class="section-head"><h2>📋 So\'nggi operatsiyalar</h2></div>')
+    if recent:
+        p.append('<div class="op-list">')
+        for log, prod in recent:
+            delta = float(log.delta or 0)
+            is_in = delta > 0
+            icon = "📥" if is_in else "📤"
+            color = "op-in" if is_in else "op-out"
+            sign = "+" if is_in else ""
+            tm = log.created_at.strftime("%d.%m %H:%M") if log.created_at else ""
+            p.append(f'<div class="op-item"><div class="op-icon {color}">{icon}</div>')
+            p.append(f'<div class="op-info"><div class="op-name">{h(prod.name)}</div><div class="op-time">{tm}</div></div>')
+            p.append(f'<div class="op-delta {color}">{sign}{delta:.0f}</div></div>')
+        p.append('</div>')
+    else:
+        p.append('<p style="text-align:center;color:var(--muted);padding:20px">Hali operatsiya yo\'q</p>')
+    p.append('</div>')
+
+    p.append(_OMBOR_PANEL_CSS)
+
+    content = "\n".join(p)
+    return web.Response(text=_base("Ombor boshqaruvi", "ombor-home", content, role="omborchi"), content_type="text/html")
+
+
+_OMBOR_PANEL_CSS = """
+<style>
+.ombor-hero {
+  display:flex; justify-content:space-between; align-items:center;
+  background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
+  border-radius:18px; padding:22px 24px; margin-bottom:20px; color:#fff;
+  box-shadow:0 10px 30px rgba(99,102,241,0.3);
+}
+.hero-greet { font-size:20px; font-weight:800; margin-bottom:4px }
+.hero-date { font-size:13px; opacity:0.9 }
+.hero-icon { font-size:42px }
+
+.kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px }
+.kpi-card {
+  border-radius:16px; padding:18px; text-align:center;
+  background:var(--bg2); border:1px solid var(--border);
+  transition:transform .2s, box-shadow .2s;
+}
+.kpi-card:hover { transform:translateY(-3px); box-shadow:0 10px 25px rgba(0,0,0,0.2) }
+.kpi-icon { font-size:26px; margin-bottom:6px }
+.kpi-num { font-size:30px; font-weight:800; line-height:1 }
+.kpi-label { font-size:12px; color:var(--muted); margin-top:6px; font-weight:600 }
+.kpi-blue .kpi-num { color:#60a5fa }
+.kpi-orange .kpi-num { color:#fbbf24 }
+.kpi-red .kpi-num { color:#f87171 }
+.kpi-green .kpi-num { color:#34d399 }
+
+.quick-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px }
+.quick-btn {
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:18px; border-radius:14px; text-decoration:none;
+  font-weight:700; font-size:13px; color:#fff; transition:transform .15s;
+}
+.quick-btn:active { transform:scale(0.96) }
+.qb-icon { font-size:24px }
+.quick-green { background:linear-gradient(135deg,#10b981,#059669) }
+.quick-blue { background:linear-gradient(135deg,#3b82f6,#2563eb) }
+.quick-red { background:linear-gradient(135deg,#ef4444,#dc2626) }
+.quick-purple { background:linear-gradient(135deg,#8b5cf6,#7c3aed) }
+
+.section-card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:16px; padding:20px; margin-bottom:16px;
+}
+.alert-section { border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.05) }
+.section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px }
+.section-head h2 { font-size:16px; margin:0 }
+.badge-count {
+  background:#ef4444; color:#fff; border-radius:20px;
+  padding:2px 12px; font-size:13px; font-weight:700;
+}
+
+.low-list { display:flex; flex-direction:column; gap:8px }
+.low-item {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 14px; background:var(--bg); border-radius:10px;
+  border-left:3px solid #fbbf24;
+}
+.low-name { font-weight:600; font-size:14px }
+.low-extra { font-size:11px; color:var(--muted); margin-top:2px }
+.low-qty { font-size:20px; font-weight:800; color:#fbbf24 }
+.low-qty span { font-size:11px; color:var(--muted); font-weight:400 }
+
+.cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px }
+.cat-tile {
+  display:block; padding:16px; border-radius:14px; text-decoration:none;
+  background:var(--bg); border:1px solid var(--border); position:relative;
+  transition:transform .15s, border-color .2s;
+}
+.cat-tile:hover { transform:translateY(-2px); border-color:#6366f1 }
+.cat-label { font-size:14px; font-weight:700; margin-bottom:8px; color:var(--fg) }
+.cat-count { font-size:22px; font-weight:800; color:#60a5fa }
+.cat-count span { font-size:11px; color:var(--muted); font-weight:400 }
+.cat-warn {
+  position:absolute; top:10px; right:10px;
+  background:rgba(245,158,11,0.2); color:#fbbf24;
+  border-radius:8px; padding:2px 8px; font-size:11px; font-weight:700;
+}
+
+.op-list { display:flex; flex-direction:column; gap:6px }
+.op-item { display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg); border-radius:10px }
+.op-icon { font-size:20px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:10px }
+.op-in { background:rgba(16,185,129,0.15) }
+.op-out { background:rgba(239,68,68,0.15) }
+.op-info { flex:1 }
+.op-name { font-weight:600; font-size:13px }
+.op-time { font-size:11px; color:var(--muted) }
+.op-delta { font-weight:800; font-size:16px }
+.op-delta.op-in { color:#34d399 }
+.op-delta.op-out { color:#f87171 }
+
+@media (max-width:768px) {
+  .kpi-grid { grid-template-columns:repeat(2,1fr) }
+  .quick-row { grid-template-columns:repeat(2,1fr) }
+  .ombor-hero { padding:18px }
+  .hero-greet { font-size:17px }
+  .hero-icon { font-size:32px }
+}
+</style>
+"""
+
+
+
+
+@_require_role("nazoratchi")
+async def inspektor_panel(request: web.Request):
+    """Nazoratchi uchun mukammal bosh sahifa."""
+    sess = _current(request)
+    name = sess.get("name", "Nazoratchi")
+    uid = sess.get("user_id")
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+    async with AsyncSessionLocal() as db:
+        r_pend = await db.execute(select(func.count(WorkEntry.id)).where(WorkEntry.status == WorkStatus.pending))
+        pending_n = int(r_pend.scalar() or 0)
+        r_today = await db.execute(
+            select(func.count(WorkEntry.id),
+                sf.sum(sa_case((WorkEntry.status == WorkStatus.approved, 1), else_=0)),
+                sf.sum(sa_case((WorkEntry.status == WorkStatus.rejected, 1), else_=0)))
+            .where(WorkEntry.inspector_id == uid, func.date(WorkEntry.finished_at) == today))
+        t = r_today.one()
+        t_ok, t_rej = int(t[1] or 0), int(t[2] or 0)
+        r_week = await db.execute(
+            select(func.count(WorkEntry.id), sf.sum(sa_case((WorkEntry.status == WorkStatus.rejected, 1), else_=0)))
+            .where(WorkEntry.work_date >= week_ago, WorkEntry.status.in_([WorkStatus.approved, WorkStatus.rejected])))
+        w = r_week.one()
+        w_total, w_rej = int(w[0] or 0), int(w[1] or 0)
+        qa_pct = ((w_total - w_rej) / w_total * 100) if w_total > 0 else 100
+        r_groups = await db.execute(
+            select(User.full_name, func.count(WorkEntry.id), func.coalesce(func.sum(WorkEntry.jami_summa), 0))
+            .join(WorkEntry, WorkEntry.worker_id == User.id).where(WorkEntry.status == WorkStatus.pending)
+            .group_by(User.id, User.full_name).order_by(func.count(WorkEntry.id).desc()).limit(10))
+        pend_groups = [(r[0], int(r[1]), float(r[2])) for r in r_groups.all()]
+
+    p = []
+    p.append('<div class="insp-hero"><div><div class="hero-greet">Assalomu alaykum, ' + h(name) + '!</div>')
+    p.append('<div class="hero-date">' + today.strftime("%d.%m.%Y") + ' &middot; Nazorat paneli</div></div><div class="hero-icon">&#9989;</div></div>')
+    if pending_n > 0:
+        p.append('<a href="/web/inspektor-panel/pending" class="pending-banner"><div class="pb-left"><div class="pb-num">' + str(pending_n) + '</div><div class="pb-label">ish tekshirilishi kerak</div></div><div class="pb-arrow">Tekshirish &rarr;</div></a>')
+    else:
+        p.append('<div class="all-clear">&#127881; Hamma ish tekshirilgan!</div>')
+    p.append('<div class="kpi-grid">')
+    p.append('<div class="kpi-card kpi-orange"><div class="kpi-icon">&#8987;</div><div class="kpi-num">' + str(pending_n) + '</div><div class="kpi-label">Kutilmoqda</div></div>')
+    p.append('<div class="kpi-card kpi-green"><div class="kpi-icon">&#9989;</div><div class="kpi-num">' + str(t_ok) + '</div><div class="kpi-label">Bugun tasdiqladim</div></div>')
+    p.append('<div class="kpi-card kpi-red"><div class="kpi-icon">&#10060;</div><div class="kpi-num">' + str(t_rej) + '</div><div class="kpi-label">Bugun rad etdim</div></div>')
+    qa_color = "kpi-green" if qa_pct >= 95 else ("kpi-orange" if qa_pct >= 85 else "kpi-red")
+    p.append('<div class="kpi-card ' + qa_color + '"><div class="kpi-icon">&#128202;</div><div class="kpi-num">' + ("%.0f" % qa_pct) + '%</div><div class="kpi-label">Hafta sifati</div></div>')
+    p.append('</div>')
+    p.append('<div class="section-card"><div class="section-head"><h2>&#8987; Kutilayotgan ishlar</h2>')
+    if pending_n: p.append('<a href="/web/inspektor-panel/pending" class="see-all">Hammasi &rarr;</a>')
+    p.append('</div>')
+    if pend_groups:
+        p.append('<div class="pend-list">')
+        for wname, cnt, summa in pend_groups:
+            ini = h(wname[0].upper()) if wname else "?"
+            p.append('<div class="pend-item"><div class="pend-avatar">' + ini + '</div><div class="pend-info"><div class="pend-name">' + h(wname) + '</div><div class="pend-meta">' + str(cnt) + ' ta ish &middot; ' + ("{:,.0f}".format(summa)) + ' som</div></div><div class="pend-count">' + str(cnt) + '</div></div>')
+        p.append('</div>')
+    else:
+        p.append('<p style="text-align:center;color:var(--muted);padding:20px">Kutilayotgan ish yoq</p>')
+    p.append('</div>')
+    p.append('<div class="quick-row">')
+    p.append('<a href="/web/inspektor-panel/review" class="quick-btn quick-green"><span class="qb-icon">&#9889;</span><span>Bittalab</span></a>')
+    p.append('<a href="/web/quality" class="quick-btn quick-blue"><span class="qb-icon">&#128202;</span><span>Sifat</span></a>')
+    p.append('<a href="/web/workers" class="quick-btn quick-purple"><span class="qb-icon">&#128101;</span><span>Ishchilar</span></a>')
+    p.append('<a href="/web/analytics" class="quick-btn quick-orange"><span class="qb-icon">&#128200;</span><span>Tahlil</span></a>')
+    p.append('</div>')
+    p.append(_INSP_PANEL_CSS)
+    content = "\n".join(p)
+    return web.Response(text=_base("Nazorat paneli", "insp-home", content, role="nazoratchi"), content_type="text/html")
+
+
+@_require_role("nazoratchi")
+async def inspektor_pending(request: web.Request):
+    """Kutilayotgan ishlar batafsil."""
+    async with AsyncSessionLocal() as db:
+        r = await db.execute(select(WorkEntry, User).join(User, User.id == WorkEntry.worker_id)
+            .where(WorkEntry.status == WorkStatus.pending).order_by(WorkEntry.created_at.asc()))
+        rows = r.all()
+    p = []
+    p.append('<h1 style="margin-bottom:4px">&#8987; Kutilayotgan ishlar</h1>')
+    p.append('<p style="color:var(--muted);margin-bottom:20px">' + str(len(rows)) + ' ta ish tekshirilishi kerak</p>')
+    if not rows:
+        p.append('<div class="all-clear">&#127881; Hamma ish tekshirilgan!</div>')
+    else:
+        groups = {}
+        for we, u in rows:
+            groups.setdefault((u.id, u.full_name), []).append(we)
+        for (uid, uname), items in groups.items():
+            total = sum(float(x.jami_summa or 0) for x in items)
+            p.append('<div class="section-card"><div class="section-head"><h2>&#128100; ' + h(uname) + '</h2><span class="badge-count">' + str(len(items)) + ' ta &middot; ' + ("{:,.0f}".format(total)) + '</span></div><div class="work-list">')
+            for x in items:
+                wt = (x.work_type.value if x.work_type else "?").replace("_", " ")
+                wd = x.work_date.strftime("%d.%m") if x.work_date else ""
+                p.append('<div class="work-item"><div class="work-info"><div class="work-type">' + h(wt) + '</div><div class="work-meta">' + ("%.0f" % x.soni) + ' dona &middot; ' + ("{:,.0f}".format(x.jami_summa)) + ' som &middot; ' + wd + '</div></div></div>')
+            p.append('</div><button class="approve-all-btn" onclick="approveUser(' + str(uid) + ')">&#9989; Hammasini tasdiqlash (' + str(len(items)) + ')</button></div>')
+        p.append('<a href="/web/inspektor-panel/review" class="quick-btn quick-blue" style="display:block;text-align:center;margin-bottom:10px;text-decoration:none;padding:14px;border-radius:12px">&#128269; Bittalab ko\'rish (sifat baholash + rad etish)</a>')
+        p.append('<button class="approve-everything" onclick="approveAll()">&#9989;&#9989; BARCHA ishlarni tasdiqlash</button>')
+    p.append(_INSP_JS)
+    p.append(_INSP_PANEL_CSS)
+    content = "\n".join(p)
+    return web.Response(text=_base("Kutilayotgan", "insp-pending", content, role="nazoratchi"), content_type="text/html")
+
+
+@_require_role("nazoratchi")
+async def inspektor_approve_user(request: web.Request):
+    sess = _current(request)
+    try:
+        data = await request.json(); wid = int(data.get("worker_id", 0))
+    except Exception:
+        return web.json_response({"ok": False})
+    async with AsyncSessionLocal() as db:
+        r = await db.execute(select(WorkEntry).where(WorkEntry.status == WorkStatus.pending, WorkEntry.worker_id == wid))
+        works = r.scalars().all(); now = datetime.now()
+        for x in works:
+            x.status = WorkStatus.approved; x.inspector_id = sess.get("user_id"); x.finished_at = now
+        await db.commit()
+    return web.json_response({"ok": True, "count": len(works)})
+
+
+@_require_role("nazoratchi")
+async def inspektor_approve_all(request: web.Request):
+    sess = _current(request)
+    async with AsyncSessionLocal() as db:
+        r = await db.execute(select(WorkEntry).where(WorkEntry.status == WorkStatus.pending))
+        works = r.scalars().all(); now = datetime.now()
+        for x in works:
+            x.status = WorkStatus.approved; x.inspector_id = sess.get("user_id"); x.finished_at = now
+        await db.commit()
+    return web.json_response({"ok": True, "count": len(works)})
+
+
+_INSP_JS = '<script>function approveUser(uid){if(!confirm("Bu ishchining barcha ishlarini tasdiqlaysizmi?"))return;fetch("/web/inspektor/approve-user",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({worker_id:uid})}).then(function(r){return r.json();}).then(function(d){if(d.ok)location.reload();else alert("Xato");});}function approveAll(){if(!confirm("BARCHA kutilayotgan ishlarni tasdiqlaysizmi?"))return;fetch("/web/inspektor/approve-all",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(r){return r.json();}).then(function(d){if(d.ok)location.reload();else alert("Xato");});}</script>'
+
+_INSP_PANEL_CSS = """
+<style>
+.insp-hero { display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg,#10b981 0%,#059669 100%); border-radius:18px; padding:22px 24px; margin-bottom:20px; color:#fff; box-shadow:0 10px 30px rgba(16,185,129,0.3); }
+.pending-banner { display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; border-radius:16px; padding:20px 24px; margin-bottom:20px; text-decoration:none; box-shadow:0 8px 24px rgba(245,158,11,0.3); }
+.pb-num { font-size:38px; font-weight:800; line-height:1 }
+.pb-label { font-size:14px; opacity:0.95 }
+.pb-arrow { font-size:16px; font-weight:700 }
+.all-clear { text-align:center; padding:30px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:16px; font-size:18px; font-weight:700; color:#34d399; margin-bottom:20px; }
+.pend-list { display:flex; flex-direction:column; gap:8px }
+.pend-item { display:flex; align-items:center; gap:12px; padding:12px; background:var(--bg); border-radius:12px }
+.pend-avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; }
+.pend-info { flex:1 }
+.pend-name { font-weight:700; font-size:14px }
+.pend-meta { font-size:12px; color:var(--muted) }
+.pend-count { background:#f59e0b; color:#fff; border-radius:12px; min-width:32px; height:32px; padding:0 8px; display:flex; align-items:center; justify-content:center; font-weight:800; }
+.see-all { color:#6366f1; text-decoration:none; font-size:13px; font-weight:600 }
+.work-list { display:flex; flex-direction:column; gap:6px; margin-bottom:12px }
+.work-item { padding:10px 12px; background:var(--bg); border-radius:10px; border-left:3px solid #6366f1 }
+.work-type { font-weight:600; font-size:13px; text-transform:capitalize }
+.work-meta { font-size:11px; color:var(--muted); margin-top:2px }
+.approve-all-btn { width:100%; padding:12px; border:none; border-radius:12px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-weight:700; font-size:14px; cursor:pointer; }
+.approve-everything { width:100%; padding:16px; border:none; border-radius:14px; background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff; font-weight:800; font-size:16px; cursor:pointer; margin-top:8px; box-shadow:0 8px 24px rgba(99,102,241,0.3); }
+@media (max-width:768px) { .kpi-grid { grid-template-columns:repeat(2,1fr) } .quick-row { grid-template-columns:repeat(2,1fr) } }
+</style>
+"""
+
+
+
+
+@_require_role("omborchi")
+async def ombor_operatsiya(request: web.Request):
+    """Omborchi uchun kirim/chiqim sahifasi — telefon uchun qulay."""
+    cat = request.query.get("cat", "")
+    q = request.query.get("q", "").strip()
+
+    async with AsyncSessionLocal() as db:
+        stmt = select(WarehouseProduct).where(WarehouseProduct.is_active == True)
+        if cat:
+            try:
+                stmt = stmt.where(WarehouseProduct.category == ProductCategory(cat))
+            except ValueError:
+                pass
+        if q:
+            stmt = stmt.where(WarehouseProduct.name.ilike(f"%{q}%"))
+        stmt = stmt.order_by(WarehouseProduct.name.asc()).limit(60)
+        r = await db.execute(stmt)
+        products = r.scalars().all()
+
+        # Kategoriyalar (filtr uchun)
+        rc = await db.execute(
+            select(WarehouseProduct.category, func.count(WarehouseProduct.id))
+            .where(WarehouseProduct.is_active == True)
+            .group_by(WarehouseProduct.category)
+        )
+        cats = [(r[0].value if r[0] else "?", int(r[1] or 0)) for r in rc.all()]
+
+    CAT_LABELS = {
+        "rulon": "Rulonlar", "gofra": "Go'fralar", "gofra_zagatovka": "Zagatovka",
+        "xromazes": "Xromazes", "laminat_xromazes": "Laminat", "yarim_tayyor": "Yarim tayyor",
+        "qolip": "Qoliplar", "tayyor_mahsulot": "Tayyor", "adyol_zapchast": "Adyol zp",
+        "uskuna_zapchast": "Uskuna zp",
+    }
+
+    p = []
+    p.append('<h1 style="margin-bottom:4px">Kirim / Chiqim</h1>')
+    p.append('<p style="color:var(--muted);margin-bottom:16px">Mahsulotni tanlang va miqdorni kiriting</p>')
+
+    # Qidiruv
+    p.append('<form method="get" action="/web/ombor-panel/operatsiya" class="ops-search">')
+    if cat: p.append('<input type="hidden" name="cat" value="' + h(cat) + '">')
+    p.append('<input type="text" name="q" value="' + h(q) + '" placeholder="Mahsulot nomi..." class="ops-search-input">')
+    p.append('<button type="submit" class="ops-search-btn">Qidirish</button>')
+    p.append('</form>')
+
+    # Kategoriya filtrlari
+    p.append('<div class="ops-cats">')
+    active_all = "ops-cat-active" if not cat else ""
+    p.append('<a href="/web/ombor-panel/operatsiya" class="ops-cat ' + active_all + '">Barchasi</a>')
+    for ck, cn in cats:
+        label = CAT_LABELS.get(ck, ck)
+        active = "ops-cat-active" if cat == ck else ""
+        p.append('<a href="/web/ombor-panel/operatsiya?cat=' + ck + '" class="ops-cat ' + active + '">' + label + ' (' + str(cn) + ')</a>')
+    p.append('</div>')
+
+    # Mahsulotlar
+    if not products:
+        p.append('<p style="text-align:center;color:var(--muted);padding:30px">Mahsulot topilmadi</p>')
+    else:
+        p.append('<div class="ops-list">')
+        for prod in products:
+            nm = h(prod.name)
+            extra = " · ".join(filter(None, [prod.razmer, prod.rang, prod.qism]))
+            extra_h = h(extra) if extra else ""
+            miq = float(prod.miqdor or 0)
+            birlik = h(prod.birlik or "dona")
+            low = miq <= float(prod.min_threshold or 0)
+            qty_color = "#f87171" if low else ("#34d399" if miq > 0 else "#94a3b8")
+            p.append('<div class="ops-item" id="prod-' + str(prod.id) + '">')
+            p.append('<div class="ops-item-head">')
+            p.append('<div class="ops-item-info"><div class="ops-name">' + nm + '</div>')
+            if extra_h: p.append('<div class="ops-extra">' + extra_h + '</div>')
+            p.append('</div>')
+            p.append('<div class="ops-qty" style="color:' + qty_color + '">' + ("%.0f" % miq) + ' <span>' + birlik + '</span></div>')
+            p.append('</div>')
+            # Kirim/chiqim boshqaruvi
+            p.append('<div class="ops-controls">')
+            p.append('<input type="number" id="amt-' + str(prod.id) + '" placeholder="Miqdor" class="ops-amt" step="any" min="0">')
+            p.append('<button class="ops-btn ops-kirim" onclick="doOp(' + str(prod.id) + ', 1)">+ Kirim</button>')
+            p.append('<button class="ops-btn ops-chiqim" onclick="doOp(' + str(prod.id) + ', -1)">- Chiqim</button>')
+            p.append('</div>')
+            p.append('</div>')
+        p.append('</div>')
+
+    p.append(_OMBOR_OPS_JS)
+    p.append(_OMBOR_OPS_CSS)
+    content = "\n".join(p)
+    return web.Response(text=_base("Kirim/Chiqim", "ombor-ops", content, role="omborchi"), content_type="text/html")
+
+
+_OMBOR_OPS_JS = '<script>function doOp(pid, sign){var inp=document.getElementById("amt-"+pid);var val=parseFloat(inp.value);if(!val||val<=0){alert("Miqdor kiriting");inp.focus();return;}var url=sign>0?"/web/warehouse/kirim":"/web/warehouse/chiqim";var izoh=sign>0?"Web panel - kirim":"Web panel - chiqim";fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:pid,miqdor:val,izoh:izoh})}).then(function(r){return r.json();}).then(function(d){if(d.ok){var item=document.getElementById("prod-"+pid);var qty=item.querySelector(".ops-qty");qty.innerHTML=Math.round(d.new_miqdor)+" <span>dona</span>";qty.style.color=sign>0?"#34d399":"#fbbf24";inp.value="";var btn=event.target;var old=btn.textContent;btn.textContent="Saqlandi";setTimeout(function(){btn.textContent=old;qty.style.color="";},1200);}else{alert("Xato: "+(d.error||"?"));}}).catch(function(e){alert("Tarmoq xatosi: "+e);});}</script>'
+
+_OMBOR_OPS_CSS = """
+<style>
+.ops-search { display:flex; gap:8px; margin-bottom:14px }
+.ops-search-input { flex:1; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--bg2); color:var(--fg); font-size:15px }
+.ops-search-btn { padding:12px 20px; border:none; border-radius:12px; background:#6366f1; color:#fff; font-weight:700; cursor:pointer }
+.ops-cats { display:flex; gap:8px; overflow-x:auto; padding-bottom:10px; margin-bottom:16px; -webkit-overflow-scrolling:touch }
+.ops-cat { white-space:nowrap; padding:8px 14px; border-radius:20px; background:var(--bg2); border:1px solid var(--border); color:var(--fg); text-decoration:none; font-size:13px; font-weight:600 }
+.ops-cat-active { background:#6366f1; color:#fff; border-color:#6366f1 }
+.ops-list { display:flex; flex-direction:column; gap:10px }
+.ops-item { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:14px; }
+.ops-item-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px }
+.ops-name { font-weight:700; font-size:15px }
+.ops-extra { font-size:12px; color:var(--muted); margin-top:2px }
+.ops-qty { font-size:22px; font-weight:800; white-space:nowrap }
+.ops-qty span { font-size:12px; color:var(--muted); font-weight:400 }
+.ops-controls { display:flex; gap:8px; align-items:center }
+.ops-amt { flex:1; padding:11px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--fg); font-size:16px; min-width:0 }
+.ops-btn { padding:11px 16px; border:none; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; white-space:nowrap }
+.ops-kirim { background:linear-gradient(135deg,#10b981,#059669); color:#fff }
+.ops-chiqim { background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff }
+.ops-btn:active { transform:scale(0.95) }
+@media (max-width:768px) {
+  .ops-controls { flex-wrap:wrap }
+  .ops-amt { flex:1 1 100%; margin-bottom:6px }
+  .ops-btn { flex:1 }
+}
+</style>
+"""
+
+
+
+
+@_require_role("nazoratchi")
+async def inspektor_review(request: web.Request):
+    """Bittalab ko'rib chiqish."""
+    async with AsyncSessionLocal() as db:
+        r = await db.execute(
+            select(WorkEntry, User).join(User, User.id == WorkEntry.worker_id)
+            .where(WorkEntry.status == WorkStatus.pending)
+            .order_by(WorkEntry.created_at.asc())
+        )
+        rows = r.all()
+
+    p = []
+    p.append('<h1 style="margin-bottom:4px">Bittalab ko\'rish</h1>')
+    p.append('<p style="color:var(--muted);margin-bottom:16px">' + str(len(rows)) + ' ta ish</p>')
+    if not rows:
+        p.append('<div class="all-clear">&#127881; Hamma ish tekshirilgan!</div>')
+    else:
+        p.append('<div class="rev-list">')
+        for we, u in rows:
+            wt = (we.work_type.value if we.work_type else "?").replace("_", " ")
+            wd = we.work_date.strftime("%d.%m.%Y") if we.work_date else ""
+            wid = we.id
+            ini = h(u.full_name[0].upper()) if u.full_name else "?"
+            p.append('<div class="rev-card" id="rev-' + str(wid) + '">')
+            p.append('<div class="rev-head"><div class="rev-avatar">' + ini + '</div>')
+            p.append('<div class="rev-who"><div class="rev-name">' + h(u.full_name) + '</div><div class="rev-wt">' + h(wt) + '</div></div></div>')
+            p.append('<div class="rev-details">')
+            p.append('<div class="rev-detail"><span>Miqdor</span><b>' + ("%.0f" % we.soni) + ' dona</b></div>')
+            p.append('<div class="rev-detail"><span>Summa</span><b>' + ("{:,.0f}".format(we.jami_summa or 0)) + '</b></div>')
+            p.append('<div class="rev-detail"><span>Sana</span><b>' + wd + '</b></div>')
+            p.append('</div>')
+            p.append('<div class="rev-quality"><div class="rq-label">Sifat darajasi:</div><div class="rq-btns">')
+            p.append('<button class="rq-btn rq-a rq-active" onclick="setGrade(' + str(wid) + ',1,this)">A (100%)</button>')
+            p.append('<button class="rq-btn rq-b" onclick="setGrade(' + str(wid) + ',2,this)">B (80%)</button>')
+            p.append('<button class="rq-btn rq-c" onclick="setGrade(' + str(wid) + ',3,this)">C (60%)</button>')
+            p.append('</div></div>')
+            p.append('<div class="rev-actions">')
+            p.append('<button class="rev-ok" onclick="approveOne(' + str(wid) + ')">&#9989; Tasdiqlash</button>')
+            p.append('<button class="rev-no" onclick="showReject(' + str(wid) + ')">&#10060; Rad etish</button>')
+            p.append('</div>')
+            p.append('<div class="rev-reject" id="reject-' + str(wid) + '" style="display:none">')
+            p.append('<div class="rr-label">Rad etish sababi:</div><div class="rr-btns">')
+            for reason in ["Sifat past", "Miqdor xato", "Material xato", "Ish tugallanmagan", "Ikki marta kiritilgan", "Boshqa sabab"]:
+                p.append('<button class="rr-btn" onclick="rejectOne(' + str(wid) + ',\'' + reason + '\')">' + reason + '</button>')
+            p.append('</div></div>')
+            p.append('</div>')
+        p.append('</div>')
+
+    p.append(_INSP_REVIEW_JS)
+    p.append(_INSP_REVIEW_CSS)
+    content = "\n".join(p)
+    return web.Response(text=_base("Bittalab ko'rish", "insp-review", content, role="nazoratchi"), content_type="text/html")
+
+
+@_require_role("nazoratchi")
+async def inspektor_approve_one(request: web.Request):
+    sess = _current(request)
+    try:
+        data = await request.json()
+        wid = int(data.get("work_id", 0)); grade = int(data.get("grade", 1))
+    except Exception:
+        return web.json_response({"ok": False})
+    grade_map = {1: QualityGrade.grade_1, 2: QualityGrade.grade_2, 3: QualityGrade.grade_3}
+    coef_map = {1: 1.0, 2: 0.8, 3: 0.6}
+    async with AsyncSessionLocal() as db:
+        we = await db.get(WorkEntry, wid)
+        if not we or we.status != WorkStatus.pending:
+            return web.json_response({"ok": False, "error": "Topilmadi"})
+        we.status = WorkStatus.approved
+        we.inspector_id = sess.get("user_id")
+        we.finished_at = datetime.now()
+        we.quality_grade = grade_map.get(grade, QualityGrade.grade_1)
+        if grade > 1 and we.jami_summa:
+            we.jami_summa = round(float(we.jami_summa) * coef_map.get(grade, 1.0))
+        await db.commit()
+    return web.json_response({"ok": True})
+
+
+@_require_role("nazoratchi")
+async def inspektor_reject_one(request: web.Request):
+    sess = _current(request)
+    try:
+        data = await request.json()
+        wid = int(data.get("work_id", 0)); sabab = str(data.get("sabab", "Boshqa sabab"))
+    except Exception:
+        return web.json_response({"ok": False})
+    async with AsyncSessionLocal() as db:
+        we = await db.get(WorkEntry, wid)
+        if not we or we.status != WorkStatus.pending:
+            return web.json_response({"ok": False, "error": "Topilmadi"})
+        we.status = WorkStatus.rejected
+        we.inspector_id = sess.get("user_id")
+        we.finished_at = datetime.now()
+        we.rad_sababi = sabab
+        await db.commit()
+    return web.json_response({"ok": True})
+
+
+_INSP_REVIEW_JS = '<script>var grades={};function setGrade(wid,g,btn){grades[wid]=g;var card=document.getElementById("rev-"+wid);card.querySelectorAll(".rq-btn").forEach(function(b){b.classList.remove("rq-active");});btn.classList.add("rq-active");}function fadeOut(wid,cls,txt){var c=document.getElementById("rev-"+wid);c.classList.add(cls);c.innerHTML="<div class=\\"rev-done\\">"+txt+"</div>";setTimeout(function(){c.remove();var l=document.querySelector(".rev-list");if(l&&l.children.length===0)location.reload();},700);}function approveOne(wid){var g=grades[wid]||1;fetch("/web/inspektor/approve-one",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({work_id:wid,grade:g})}).then(function(r){return r.json();}).then(function(d){if(d.ok){fadeOut(wid,"done-ok","Tasdiqlandi");}else{alert("Xato");}});}function showReject(wid){var r=document.getElementById("reject-"+wid);r.style.display=r.style.display==="none"?"block":"none";}function rejectOne(wid,sabab){if(!confirm("Rad etilsinmi? Sabab: "+sabab))return;fetch("/web/inspektor/reject-one",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({work_id:wid,sabab:sabab})}).then(function(r){return r.json();}).then(function(d){if(d.ok){fadeOut(wid,"done-no","Rad etildi");}else{alert("Xato");}});}</script>'
+
+_INSP_REVIEW_CSS = """
+<style>
+.rev-list { display:flex; flex-direction:column; gap:14px }
+.rev-card { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:16px; transition:opacity .3s }
+.rev-card.done-ok, .rev-card.done-no { opacity:0.5 }
+.rev-done { text-align:center; padding:20px; font-weight:700 }
+.done-ok .rev-done { color:#34d399 }
+.done-no .rev-done { color:#f87171 }
+.rev-head { display:flex; align-items:center; gap:12px; margin-bottom:12px }
+.rev-avatar { width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px }
+.rev-name { font-weight:700; font-size:15px }
+.rev-wt { font-size:13px; color:var(--muted); text-transform:capitalize }
+.rev-details { display:flex; gap:10px; margin-bottom:14px }
+.rev-detail { flex:1; background:var(--bg); border-radius:10px; padding:10px; text-align:center }
+.rev-detail span { display:block; font-size:11px; color:var(--muted); margin-bottom:3px }
+.rev-detail b { font-size:14px }
+.rev-quality { margin-bottom:12px }
+.rq-label { font-size:13px; color:var(--muted); margin-bottom:6px; font-weight:600 }
+.rq-btns { display:flex; gap:8px }
+.rq-btn { flex:1; padding:10px; border:2px solid var(--border); border-radius:10px; background:var(--bg); color:var(--fg); font-weight:700; font-size:13px; cursor:pointer }
+.rq-btn.rq-active.rq-a { background:#10b981; color:#fff; border-color:#10b981 }
+.rq-btn.rq-active.rq-b { background:#f59e0b; color:#fff; border-color:#f59e0b }
+.rq-btn.rq-active.rq-c { background:#ef4444; color:#fff; border-color:#ef4444 }
+.rev-actions { display:flex; gap:10px }
+.rev-ok { flex:2; padding:13px; border:none; border-radius:12px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-weight:700; font-size:15px; cursor:pointer }
+.rev-no { flex:1; padding:13px; border:none; border-radius:12px; background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; font-weight:700; font-size:15px; cursor:pointer }
+.rev-reject { margin-top:12px; padding:12px; background:rgba(239,68,68,0.08); border-radius:12px; border:1px solid rgba(239,68,68,0.3) }
+.rr-label { font-size:13px; font-weight:700; color:#f87171; margin-bottom:8px }
+.rr-btns { display:flex; flex-wrap:wrap; gap:8px }
+.rr-btn { padding:9px 14px; border:1px solid rgba(239,68,68,0.4); border-radius:20px; background:var(--bg); color:var(--fg); font-size:13px; font-weight:600; cursor:pointer }
+.rr-btn:active { background:#ef4444; color:#fff }
+.all-clear { text-align:center; padding:30px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:16px; font-size:18px; font-weight:700; color:#34d399 }
+</style>
+"""
 
 
 @_require_auth
@@ -6630,6 +7365,38 @@ async def ombor_cat_add(request: web.Request):
 
 
 
+async def token_login(request: web.Request):
+    """Bot bergan token orqali kirish: /w/{token}"""
+    token = request.match_info.get("token", "")
+    if not token:
+        raise web.HTTPFound("/web/login")
+
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import select
+        r = await db.execute(select(User).where(User.web_token == token, User.is_active == True))
+        user = r.scalar_one_or_none()
+
+    if not user:
+        return web.Response(
+            text="<h2 style='font-family:sans-serif;text-align:center;margin-top:50px'>Havola yaroqsiz yoki eskirgan.<br>Botdan yangi havola oling.</h2>",
+            content_type="text/html",
+        )
+
+    role = user.role.value if hasattr(user.role, "value") else str(user.role)
+
+    sess_token = _make_token(str(user.id))
+    _sessions[sess_token] = {
+        "expires": time.time() + _SESSION_TTL,
+        "user_id": user.id,
+        "role":    role,
+        "name":    user.full_name,
+    }
+
+    resp = web.HTTPFound(_role_home(role))
+    resp.set_cookie("wpsession", sess_token, max_age=_SESSION_TTL, httponly=True, samesite="Lax")
+    raise resp
+
+
 async def web_login(request: web.Request):
     """Login sahifasi."""
     error = ""
@@ -7153,6 +7920,16 @@ def create_app() -> web.Application:
     app.router.add_get("/web/ombor/{cat_key}",       ombor_cat_detail)
     app.router.add_post("/web/ombor/{cat_key}/add",  ombor_cat_add)
     app.router.add_get("/web/login",         web_login)
+    app.router.add_get("/w/{token}", token_login)
+    app.router.add_get("/web/ombor-panel", ombor_panel)
+    app.router.add_get("/web/ombor-panel/operatsiya", ombor_operatsiya)
+    app.router.add_get("/web/inspektor-panel", inspektor_panel)
+    app.router.add_get("/web/inspektor-panel/pending", inspektor_pending)
+    app.router.add_post("/web/inspektor/approve-user", inspektor_approve_user)
+    app.router.add_post("/web/inspektor/approve-all", inspektor_approve_all)
+    app.router.add_get("/web/inspektor-panel/review", inspektor_review)
+    app.router.add_post("/web/inspektor/approve-one", inspektor_approve_one)
+    app.router.add_post("/web/inspektor/reject-one", inspektor_reject_one)
     app.router.add_post("/web/login",         web_login)
     app.router.add_get("/web/logout",         web_logout)
     app.router.add_get("/web/",                       dashboard)
@@ -7223,3 +8000,4 @@ async def start_web(app: web.Application):
     await site.start()
     logger.info("Web panel: http://%s:%s/web/", WEB_HOST, WEB_PORT)
     return runner
+

@@ -67,6 +67,13 @@ async def migrate():
             """,
         ),
         (
+            "web_token",
+            """
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS web_token VARCHAR(80);
+            """,
+        ),
+        (
             "zero_notified",
             """
             ALTER TABLE warehouse_products

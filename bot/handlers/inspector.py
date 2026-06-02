@@ -1144,3 +1144,19 @@ async def insp_pending_list(cb: CallbackQuery, db: AsyncSession):
     await cb.message.answer(txt, parse_mode="HTML")
     await cb.answer()
 
+@router.message(F.text == "🌐 Web panel")
+async def inspektor_web_panel(message: Message, db: AsyncSession):
+    """Inspektor uchun shaxsiy web panel havolasi."""
+    user = await get_user(db, message.from_user.id)
+    if not user:
+        return
+    from utils.web_link import get_or_create_web_link
+    link = await get_or_create_web_link(db, user)
+    await message.answer(
+        f"🌐 <b>Nazoratchi Web paneli</b>\n\n"
+        f"{link}\n\n"
+        f"⚠️ Shaxsiy havola — boshqalarga bermang.\n"
+        f"Telefon yoki kompyuterda oching — parol kerak emas.",
+        parse_mode="HTML",
+    )
+

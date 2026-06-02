@@ -34,6 +34,8 @@ MAIN_MENU_BUTTONS = {
     "Ombor", "Ishchilar", "Hisobotlar", "Maosh", "Narxlar", "Jarimalar",
     "🔄 Yangi oy boshlash", "📄 PDF hisobotlar", "Web panel", "📋 Buyurtmalar",
     "🩺 Tizim holati", "🎯 Maqsadlar", "Foydalanuvchi qoshish",
+    # Web panel
+    "🌐 Web panel",
     # Umumiy
     "Menyu",
 }
@@ -63,6 +65,7 @@ def get_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
             [KeyboardButton(text="Tekshiruv hisoboti"), KeyboardButton(text="Smena holati")],
             [KeyboardButton(text="Reyting"),            KeyboardButton(text="Sifat hisoboti")],
             [KeyboardButton(text="📊 Davomat hisoboti")],
+            [KeyboardButton(text="🌐 Web panel")],
         ]
     elif role == UserRole.omborchi:
         buttons = [
@@ -76,6 +79,7 @@ def get_main_menu(role: UserRole) -> ReplyKeyboardMarkup:
             [KeyboardButton(text="Inventarizatsiya"),       KeyboardButton(text="Buyurtma royxati")],
             [KeyboardButton(text="Ombor hisoboti"),         KeyboardButton(text="Mahsulot tarixi")],
             [KeyboardButton(text="Mahsulot tahrirlash")],
+            [KeyboardButton(text="🌐 Web panel")],
         ]
     elif role in (UserRole.admin, UserRole.superadmin):
         buttons = [

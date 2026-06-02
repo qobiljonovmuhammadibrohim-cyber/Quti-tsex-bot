@@ -10,6 +10,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, DateTime, Boolean,
     ForeignKey, Text, Enum, BigInteger, Date
 )
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import date, datetime
 from sqlalchemy.sql import func
@@ -128,6 +129,7 @@ class User(Base):
     phone       = Column(String(20), nullable=True)
     role        = Column(Enum(UserRole), default=UserRole.ishchi, nullable=False)
     is_active   = Column(Boolean, default=True)
+    web_token   = Column(String(80), nullable=True, unique=True)  # Web panel kirish tokeni
     created_at  = Column(DateTime, server_default=func.now())
 
     works           = relationship("WorkEntry",    back_populates="worker",        foreign_keys="[WorkEntry.worker_id]")
@@ -139,7 +141,6 @@ class User(Base):
     salary_reports  = relationship("SalaryReport", back_populates="worker",        foreign_keys="[SalaryReport.worker_id]")
     warehouse_logs  = relationship("WarehouseLog", back_populates="user",          foreign_keys="[WarehouseLog.user_id]")
     work_sessions   = relationship("WorkSession",  back_populates="worker",        foreign_keys="[WorkSession.worker_id]")
-
 
 class WorkSession(Base):
     __tablename__ = "work_sessions"
@@ -214,6 +215,11 @@ class WarehouseLog(Base):
     izoh          = Column(Text, nullable=True)
     work_entry_id = Column(Integer, ForeignKey("work_entries.id"), nullable=True)
     created_at    = Column(DateTime, server_default=func.now())
+
+    @hybrid_property
+    def delta(self):
+        """Miqdor o'zgarishi: keyin - oldin (kirim musbat, chiqim manfiy)."""
+        return (self.keyin or 0) - (self.oldin or 0)
 
     product    = relationship("WarehouseProduct", back_populates="logs")
     user       = relationship("User",      back_populates="warehouse_logs", foreign_keys=[user_id])

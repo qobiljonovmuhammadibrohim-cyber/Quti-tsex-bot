@@ -765,10 +765,14 @@ async def web_panel(message: Message, db: AsyncSession):
     user = await get_user(db, message.from_user.id)
     if not user or user.role not in ADMIN_ROLES:
         await message.answer("Ruxsat yo'q."); return
+    from utils.web_link import get_or_create_web_link
+    link = await get_or_create_web_link(db, user)
     await message.answer(
-        f"🌐 Web panel\n\n"
-        f"{WEB_URL + '/web/' if WEB_URL else f'http://{WEB_HOST}:{WEB_PORT}/web/'}\n\n"
-        f"Parol: Railway Variables → WEB_PASSWORD"
+        f"🌐 <b>Shaxsiy Web panel havolangiz</b>\n\n"
+        f"{link}\n\n"
+        f"⚠️ Bu havola shaxsiy — boshqalarga bermang.\n"
+        f"Bosib oching — parol kerak emas.",
+        parse_mode="HTML",
     )
 
 
