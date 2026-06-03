@@ -11,9 +11,10 @@ from sqlalchemy import case as sa_case
 
 from database.db import AsyncSessionLocal
 from database.models import WarehouseProduct, WarehouseLog, ProductCategory
+from database.queries import update_product_miqdor
 
 # Umumiy yordamchilar (web_panel.py dan)
-from web_panel import _current, _require_role, h
+from web_panel import _current, _require_role, h, _CAT_CFG
 
 
 # ─── Kategoriya nomlari ──────────────────────────────────────────────────
@@ -130,6 +131,14 @@ async def ombor_home(request: web.Request):
     p.append('</div>')
 
     p.append('<a href="/web/ombor-panel/operatsiya" class="big-btn">➕ Kirim / Chiqim qilish</a>')
+
+    # Amallar (qo'shimcha funksiyalar)
+    p.append('<div class="act-grid">')
+    p.append('<a href="/web/ombor-panel/inventar" class="act-tile"><span class="act-ic">📋</span><span>Inventarizatsiya</span></a>')
+    p.append('<a href="/web/ombor-panel/transfer" class="act-tile"><span class="act-ic">🔄</span><span>Transfer</span></a>')
+    p.append('<a href="/web/ombor-panel/buyurtma" class="act-tile"><span class="act-ic">🛒</span><span>Buyurtma</span></a>')
+    p.append('<a href="/web/ombor-panel/qoshish" class="act-tile"><span class="act-ic">➕</span><span>Yangi mahsulot</span></a>')
+    p.append('</div>')
 
     if low_list:
         p.append('<div class="card"><div class="card-head"><h2>⚠️ Kam qolganlar</h2>'
@@ -261,7 +270,7 @@ async def ombor_operatsiya(request: web.Request):
     return web.Response(text=_base_ombor("Kirim/Chiqim", "ops", "\n".join(p), name), content_type="text/html")
 
 
-# ─── 3. BO'LIMLAR ro'yxati ───────────────────────────────────────────────
+# ─── 3. BO'LIMLAR ro'yxati (turlar bilan, admin uslubida) ────────────────
 @_require_role("omborchi")
 async def ombor_bolimlar(request: web.Request):
     sess = _current(request)
@@ -274,45 +283,87 @@ async def ombor_bolimlar(request: web.Request):
                 sf.sum(sa_case((WarehouseProduct.miqdor <= WarehouseProduct.min_threshold, 1), else_=0)),
             ).where(WarehouseProduct.is_active == True).group_by(WarehouseProduct.category)
         )).all()
-        cats = [(r[0].value if r[0] else "?", int(r[1] or 0), int(r[2] or 0)) for r in cat_rows]
+        counts = {(r[0].value if r[0] else "?"): (int(r[1] or 0), int(r[2] or 0)) for r in cat_rows}
 
-    p = ['<h1>Bo\'limlar</h1>',
-         '<a href="/web/ombor-panel/qoshish" class="add-link">➕ Yangi mahsulot qo\'shish</a>',
-         '<div class="cat-grid">']
-    for ck, cnt, low in cats:
-        warn = ('<span class="cat-warn">⚠️ ' + str(low) + '</span>') if low else ''
-        p.append('<a href="/web/ombor-panel/bolim/' + ck + '" class="cat-tile">'
-                 '<div class="cat-name">' + CAT_LABELS.get(ck, ck) + '</div>'
-                 '<div class="cat-cnt">' + str(cnt) + ' <span>dona</span></div>' + warn + '</a>')
-    p.append('</div>')
+    p = ['<h1>Ombor bo\'limlari</h1>',
+         '<a href="/web/ombor-panel/qoshish" class="add-link">➕ Yangi mahsulot qo\'shish</a>']
+
+    # _CAT_CFG tartibida — barcha bo'limlar va turlar soni
+    for ck, cfg in _CAT_CFG.items():
+        cnt, low = counts.get(ck, (0, 0))
+        tur_count = len(cfg.get("turlar", {}))
+        title = cfg.get("title", ck)
+        low_badge = ('<span class="cat-warn">⚠️ ' + str(low) + '</span>') if low else '<span class="cat-ok">● OK</span>'
+        p.append('<a href="/web/ombor-panel/bolim/' + ck + '" class="sec-row">')
+        p.append('<div class="sec-name">' + title + '</div>')
+        p.append('<div class="sec-meta">'
+                 '<span class="sec-stat"><b>' + str(cnt) + '</b> mahsulot</span>'
+                 '<span class="sec-stat"><b>' + str(tur_count) + '</b> tur</span>'
+                 + low_badge + '</div>')
+        p.append('</a>')
+
+    p.append(_SEC_CSS)
     return web.Response(text=_base_ombor("Bo'limlar", "cats", "\n".join(p), name), content_type="text/html")
 
 
-# ─── 4. BITTA BO'LIM ichidagi mahsulotlar ────────────────────────────────
+# ─── 4. BITTA BO'LIM — turlar bilan ──────────────────────────────────────
 @_require_role("omborchi")
 async def ombor_bolim(request: web.Request):
     sess = _current(request)
     name = sess.get("name", "Omborchi")
     ck = request.match_info.get("cat", "")
+    tur_filter = request.query.get("tur", "")
+    cfg = _CAT_CFG.get(ck)
+    if not cfg:
+        return web.HTTPFound("/web/ombor-panel/bolimlar")
     try:
         cat_enum = ProductCategory(ck)
     except ValueError:
         return web.HTTPFound("/web/ombor-panel/bolimlar")
 
-    async with AsyncSessionLocal() as db:
-        products = (await db.execute(
-            select(WarehouseProduct).where(
-                WarehouseProduct.is_active == True, WarehouseProduct.category == cat_enum
-            ).order_by(WarehouseProduct.name.asc())
-        )).scalars().all()
+    turlar = cfg.get("turlar", {})
 
-    p = ['<h1>' + CAT_LABELS.get(ck, ck) + '</h1>',
-         '<p class="muted">' + str(len(products)) + ' ta mahsulot</p>']
+    async with AsyncSessionLocal() as db:
+        stmt = select(WarehouseProduct).where(
+            WarehouseProduct.is_active == True, WarehouseProduct.category == cat_enum
+        )
+        if tur_filter:
+            stmt = stmt.where(WarehouseProduct.tur == tur_filter)
+        products = (await db.execute(stmt.order_by(WarehouseProduct.name.asc()))).scalars().all()
+
+        # Har tur bo'yicha mahsulot soni
+        tur_rows = (await db.execute(
+            select(WarehouseProduct.tur, func.count(WarehouseProduct.id))
+            .where(WarehouseProduct.is_active == True, WarehouseProduct.category == cat_enum)
+            .group_by(WarehouseProduct.tur)
+        )).all()
+        tur_counts = {(r[0] or ""): int(r[1] or 0) for r in tur_rows}
+
+    p = ['<h1>' + cfg.get("title", ck) + '</h1>',
+         '<p class="muted">' + str(len(products)) + ' ta mahsulot · ' + str(len(turlar)) + ' tur</p>']
+    p.append('<a href="/web/ombor-panel/qoshish?cat=' + ck + '" class="add-link">➕ Bu bo\'limga mahsulot qo\'shish</a>')
+
+    # Turlar filtri
+    if turlar:
+        p.append('<div class="chips">')
+        all_on = "chip-on" if not tur_filter else ""
+        p.append('<a href="/web/ombor-panel/bolim/' + ck + '" class="chip ' + all_on + '">Barchasi</a>')
+        for tkey, tlabel in turlar.items():
+            on = "chip-on" if tur_filter == tkey else ""
+            c = tur_counts.get(tkey, 0)
+            p.append('<a href="/web/ombor-panel/bolim/' + ck + '?tur=' + tkey + '" class="chip ' + on + '">'
+                     + tlabel + ' (' + str(c) + ')</a>')
+        p.append('</div>')
+
     if not products:
-        p.append('<p class="empty">Bo\'lim bo\'sh</p>')
+        p.append('<p class="empty">Bu turda mahsulot yo\'q. "➕ Mahsulot qo\'shish" orqali kiriting.</p>')
     else:
         for pr in products:
-            extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
+            tur_label = turlar.get(pr.tur, pr.tur or "")
+            extra_parts = list(filter(None, [pr.razmer, pr.rang, pr.qism]))
+            if tur_label:
+                extra_parts.insert(0, tur_label)
+            extra = " · ".join(extra_parts)
             miq = float(pr.miqdor or 0)
             low = miq <= float(pr.min_threshold or 0)
             color = "#f87171" if low else ("#34d399" if miq > 0 else "#94a3b8")
@@ -330,7 +381,8 @@ async def ombor_bolim(request: web.Request):
                      '<button class="op-b op-out-btn" onclick="doOp(' + pid + ',-1)">− Chiqim</button>'
                      '</div></div>')
     p.append(_OPS_JS)
-    return web.Response(text=_base_ombor(CAT_LABELS.get(ck, ck), "cats", "\n".join(p), name), content_type="text/html")
+    p.append(_SEC_CSS)
+    return web.Response(text=_base_ombor(cfg.get("title", ck), "cats", "\n".join(p), name), content_type="text/html")
 
 
 # ─── 5. TARIX ────────────────────────────────────────────────────────────
@@ -364,6 +416,21 @@ async def ombor_tarix(request: web.Request):
                      '<div class="op-d ' + cls + '">' + sign + ("%.0f" % d) + '</div></div>')
         p.append('</div>')
     return web.Response(text=_base_ombor("Tarix", "history", "\n".join(p), name), content_type="text/html")
+
+
+_SEC_CSS = """
+<style>
+.sec-row { display:flex; justify-content:space-between; align-items:center; gap:10px;
+  background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:16px;
+  margin-bottom:10px; text-decoration:none; color:var(--fg) }
+.sec-row:active { border-color:var(--accent) }
+.sec-name { font-weight:700; font-size:15px }
+.sec-meta { display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:flex-end }
+.sec-stat { font-size:12px; color:var(--muted) }
+.sec-stat b { color:#60a5fa; font-size:15px }
+.cat-ok { color:#34d399; font-size:12px; font-weight:700 }
+</style>
+"""
 
 
 # ─── JS (kirim/chiqim) ───────────────────────────────────────────────────
@@ -430,6 +497,14 @@ h1 { font-size:22px; margin-bottom:4px }
   color:#fff; text-decoration:none; padding:18px; border-radius:16px; font-weight:800; font-size:17px; margin-bottom:18px;
   box-shadow:0 8px 24px rgba(16,185,129,0.3); }
 .big-btn:active { transform:scale(0.98) }
+
+.act-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:18px }
+.act-tile { display:flex; flex-direction:column; align-items:center; gap:8px; text-decoration:none;
+  background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:18px 10px;
+  color:var(--fg); font-size:13px; font-weight:600; text-align:center }
+.act-tile:active { border-color:var(--accent) }
+.act-ic { font-size:28px }
+.inv-diff { margin-top:8px; font-size:13px; font-weight:700; text-align:right }
 
 .card { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:14px }
 .card-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
@@ -504,18 +579,24 @@ async def ombor_qoshish(request: web.Request):
     sess = _current(request)
     name = sess.get("name", "Omborchi")
     msg = request.query.get("msg", "")
+    pre_cat = request.query.get("cat", "")
 
+    import json as _json
     cat_options = ""
-    for ck, label in CAT_LABELS.items():
-        cat_options += '<option value="' + ck + '">' + label + '</option>'
+    for ck, cfg in _CAT_CFG.items():
+        sel = " selected" if ck == pre_cat else ""
+        cat_options += '<option value="' + ck + '"' + sel + '>' + cfg.get("title", ck) + '</option>'
+    # Turlar JS uchun
+    turlar_js = _json.dumps({ck: cfg.get("turlar", {}) for ck, cfg in _CAT_CFG.items()}, ensure_ascii=False)
 
     p = ['<h1>Yangi mahsulot</h1>', '<p class="muted">Omborga yangi mahsulot qo\'shish</p>']
     if msg == "ok":
-        p.append('<div class="ok-msg">✅ Mahsulot qo\'shildi!</div>')
+        p.append('<div class="ok-msg">✅ Mahsulot qo\'shildi! Yana qo\'shishingiz mumkin.</div>')
 
     p.append('<form method="post" action="/web/ombor-panel/qoshish" class="add-form">')
-    p.append('<label>Bo\'lim (kategoriya)</label>'
-             '<select name="category" class="fld" required>' + cat_options + '</select>')
+    p.append('<label>Bo\'lim (kategoriya) *</label>'
+             '<select name="category" id="cat" class="fld" onchange="updTur()" required>' + cat_options + '</select>')
+    p.append('<label>Tur</label><select name="tur" id="tur" class="fld"></select>')
     p.append('<label>Nomi *</label><input name="name" class="fld" placeholder="Masalan: Oq rulon 120sm" required>')
     p.append('<div class="frow">'
              '<div><label>Razmer</label><input name="razmer" class="fld" placeholder="120sm"></div>'
@@ -528,6 +609,12 @@ async def ombor_qoshish(request: web.Request):
              '<div><label>Ogoh chegarasi (sariq)</label><input name="yellow_threshold" type="number" step="any" class="fld" value="20"></div></div>')
     p.append('<button class="save-btn">💾 Qo\'shish</button></form>')
 
+    p.append('<script>var TURLAR=' + turlar_js + ';'
+             'function updTur(){var c=document.getElementById("cat").value;'
+             'var sel=document.getElementById("tur");var ts=TURLAR[c]||{};'
+             'sel.innerHTML="<option value=\\"\\">— tur tanlanmagan —</option>";'
+             'for(var k in ts){var o=document.createElement("option");o.value=k;o.textContent=ts[k];sel.appendChild(o);}}'
+             'updTur();</script>')
     p.append(_ADD_CSS)
     return web.Response(text=_base_ombor("Qo'shish", "add", "\n".join(p), name), content_type="text/html")
 
@@ -553,6 +640,7 @@ async def ombor_qoshish_post(request: web.Request):
         db.add(WarehouseProduct(
             category=cat,
             name=name_v,
+            tur=(data.get("tur") or "").strip() or None,
             razmer=(data.get("razmer") or "").strip() or None,
             rang=(data.get("rang") or "").strip() or None,
             birlik=(data.get("birlik") or "dona").strip(),
@@ -562,7 +650,8 @@ async def ombor_qoshish_post(request: web.Request):
             is_active=True,
         ))
         await db.commit()
-    raise web.HTTPFound("/web/ombor-panel/qoshish?msg=ok")
+    cat_key = data.get("category") or ""
+    raise web.HTTPFound("/web/ombor-panel/qoshish?msg=ok&cat=" + cat_key)
 
 
 # ─── 7. MAHSULOT TAHRIRLASH ──────────────────────────────────────────────
@@ -752,6 +841,246 @@ async def ombor_hisobot(request: web.Request):
     return web.Response(text=_base_ombor("Hisobot", "report", "\n".join(p), name), content_type="text/html")
 
 
+# ─── 9. INVENTARIZATSIYA (haqiqiy sanab, tuzatish) ───────────────────────
+@_require_role("omborchi")
+async def ombor_inventar(request: web.Request):
+    sess = _current(request)
+    name = sess.get("name", "Omborchi")
+    cat = request.query.get("cat", "")
+    q = request.query.get("q", "").strip()
+
+    async with AsyncSessionLocal() as db:
+        stmt = select(WarehouseProduct).where(WarehouseProduct.is_active == True)
+        if cat:
+            try:
+                stmt = stmt.where(WarehouseProduct.category == ProductCategory(cat))
+            except ValueError:
+                pass
+        if q:
+            like = "%" + q + "%"
+            stmt = stmt.where(WarehouseProduct.name.ilike(like) | WarehouseProduct.razmer.ilike(like))
+        products = (await db.execute(stmt.order_by(WarehouseProduct.name.asc()).limit(80))).scalars().all()
+        cat_rows = (await db.execute(
+            select(WarehouseProduct.category, func.count(WarehouseProduct.id))
+            .where(WarehouseProduct.is_active == True).group_by(WarehouseProduct.category)
+        )).all()
+        cats = [(r[0].value if r[0] else "?", int(r[1] or 0)) for r in cat_rows]
+
+    p = ['<h1>📋 Inventarizatsiya</h1>',
+         '<p class="muted">Haqiqiy sanab, miqdorni to\'g\'rilang. Farq avtomatik hisoblanadi.</p>']
+    p.append('<form method="get" action="/web/ombor-panel/inventar" class="search-form">')
+    p.append('<input type="text" name="q" value="' + h(q) + '" placeholder="Mahsulot qidirish..." class="search-input">')
+    p.append('<button class="search-btn">🔍</button></form>')
+    p.append('<div class="chips">')
+    p.append('<a href="/web/ombor-panel/inventar" class="chip ' + ("chip-on" if not cat else "") + '">Barchasi</a>')
+    for ck, cnt in cats:
+        on = "chip-on" if cat == ck else ""
+        p.append('<a href="/web/ombor-panel/inventar?cat=' + ck + '" class="chip ' + on + '">' + CAT_LABELS.get(ck, ck) + '</a>')
+    p.append('</div>')
+
+    if not products:
+        p.append('<p class="empty">Mahsulot topilmadi</p>')
+    else:
+        for pr in products:
+            extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
+            pid = str(pr.id)
+            miq = float(pr.miqdor or 0)
+            p.append('<div class="op-card" id="inv-' + pid + '">')
+            p.append('<div class="op-top"><div><div class="op-name">' + h(pr.name) + '</div>')
+            if extra:
+                p.append('<div class="op-extra">' + h(extra) + '</div>')
+            p.append('</div><div class="op-qty">Bot: <b id="invbot-' + pid + '">' + ("%.0f" % miq) + '</b> <span>' + h(pr.birlik or "dona") + '</span></div></div>')
+            p.append('<div class="op-ctrl">'
+                     '<input type="number" id="invact-' + pid + '" placeholder="Haqiqiy son" class="op-amt" step="any" min="0">'
+                     '<button class="op-b op-in-btn" onclick="doInv(' + pid + ')">✓ Saqlash</button>'
+                     '</div><div class="inv-diff" id="invdiff-' + pid + '"></div></div>')
+    p.append(_INV_JS)
+    return web.Response(text=_base_ombor("Inventarizatsiya", "more", "\n".join(p), name), content_type="text/html")
+
+
+@_require_role("omborchi")
+async def ombor_inventar_post(request: web.Request):
+    sess = _current(request)
+    try:
+        data = await request.json()
+        pid = int(data.get("product_id"))
+        haqiqiy = float(data.get("haqiqiy"))
+    except (ValueError, TypeError):
+        return web.json_response({"ok": False, "error": "Noto'g'ri ma'lumot"})
+    if haqiqiy < 0:
+        return web.json_response({"ok": False, "error": "Manfiy bo'lmasin"})
+    async with AsyncSessionLocal() as db:
+        pr = await db.get(WarehouseProduct, pid)
+        if not pr:
+            return web.json_response({"ok": False, "error": "Topilmadi"})
+        bot_miq = float(pr.miqdor or 0)
+        farq = haqiqiy - bot_miq
+        if farq == 0:
+            return web.json_response({"ok": True, "new_miqdor": bot_miq, "farq": 0})
+        try:
+            updated = await update_product_miqdor(
+                db, pid, farq, sess.get("user_id"),
+                izoh=f"Inventarizatsiya: bot={bot_miq:.0f} → haqiqiy={haqiqiy:.0f} (farq={farq:+.0f})",
+            )
+            await db.commit()
+            return web.json_response({"ok": True, "new_miqdor": float(updated.miqdor), "farq": farq})
+        except Exception as e:
+            return web.json_response({"ok": False, "error": str(e)[:100]})
+
+
+# ─── 10. TRANSFER (zanjir — bir bo'limdan boshqasiga) ─────────────────────
+@_require_role("omborchi")
+async def ombor_transfer(request: web.Request):
+    sess = _current(request)
+    name = sess.get("name", "Omborchi")
+    msg = request.query.get("msg", "")
+    async with AsyncSessionLocal() as db:
+        products = (await db.execute(
+            select(WarehouseProduct).where(
+                WarehouseProduct.is_active == True, WarehouseProduct.miqdor > 0
+            ).order_by(WarehouseProduct.name.asc())
+        )).scalars().all()
+
+    src_opts = ""
+    for pr in products:
+        extra = (" (" + h(pr.razmer) + ")") if pr.razmer else ""
+        src_opts += ('<option value="' + str(pr.id) + '">' + h(pr.name) + extra +
+                     ' — ' + ("%.0f" % float(pr.miqdor or 0)) + ' ' + h(pr.birlik or "dona") + '</option>')
+    dst_opts = "".join('<option value="' + ck + '">' + label + '</option>' for ck, label in CAT_LABELS.items())
+
+    p = ['<h1>🔄 Transfer (zanjir)</h1>',
+         '<p class="muted">Mahsulotni bir bo\'limdan boshqasiga ko\'chirish</p>']
+    if msg == "ok":
+        p.append('<div class="ok-msg">✅ Transfer amalga oshirildi!</div>')
+    elif msg == "err":
+        p.append('<div class="ok-msg" style="background:rgba(239,68,68,0.12);color:#f87171">⚠️ Xato: miqdor yetarli emas yoki mahsulot topilmadi</div>')
+    p.append('<form method="post" action="/web/ombor-panel/transfer" class="add-form">')
+    p.append('<label>Manba mahsulot (qayerdan)</label><select name="src_id" class="fld" required>' + src_opts + '</select>')
+    p.append('<label>Maqsad bo\'lim (qayerga)</label><select name="dst_cat" class="fld" required>' + dst_opts + '</select>')
+    p.append('<label>Miqdor</label><input name="miqdor" type="number" step="any" min="0" class="fld" required>')
+    p.append('<button class="save-btn">🔄 Ko\'chirish</button></form>')
+    p.append(_ADD_CSS)
+    return web.Response(text=_base_ombor("Transfer", "more", "\n".join(p), name), content_type="text/html")
+
+
+@_require_role("omborchi")
+async def ombor_transfer_post(request: web.Request):
+    sess = _current(request)
+    data = await request.post()
+    try:
+        src_id = int(data.get("src_id"))
+        dst_cat = ProductCategory(data.get("dst_cat"))
+        miqdor = float(data.get("miqdor") or 0)
+    except (ValueError, TypeError):
+        raise web.HTTPFound("/web/ombor-panel/transfer?msg=err")
+    if miqdor <= 0:
+        raise web.HTTPFound("/web/ombor-panel/transfer?msg=err")
+
+    async with AsyncSessionLocal() as db:
+        src = await db.get(WarehouseProduct, src_id)
+        if not src or float(src.miqdor or 0) < miqdor:
+            raise web.HTTPFound("/web/ombor-panel/transfer?msg=err")
+        uid = sess.get("user_id")
+        # Manbadan ayirish
+        await update_product_miqdor(db, src_id, -miqdor, uid,
+                                    izoh=f"Transfer → {dst_cat.value}")
+        # Maqsadga qo'shish (mos mahsulot topib yoki yangi yaratib)
+        dst = (await db.execute(
+            select(WarehouseProduct).where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.category == dst_cat,
+                WarehouseProduct.name == src.name,
+                WarehouseProduct.razmer == src.razmer,
+                WarehouseProduct.rang == src.rang,
+            ).limit(1)
+        )).scalar_one_or_none()
+        if dst:
+            await update_product_miqdor(db, dst.id, miqdor, uid,
+                                        izoh=f"Transfer ← {src.category.value if src.category else '?'}")
+        else:
+            new_p = WarehouseProduct(
+                category=dst_cat, name=src.name, razmer=src.razmer, rang=src.rang,
+                tur=src.tur, qism=src.qism, birlik=src.birlik, miqdor=miqdor,
+                min_threshold=src.min_threshold, yellow_threshold=src.yellow_threshold,
+                qalinlik=getattr(src, "qalinlik", None), is_active=True,
+            )
+            db.add(new_p)
+            await db.flush()
+            db.add(WarehouseLog(product_id=new_p.id, user_id=uid, amal="kirim",
+                                miqdor=miqdor, oldin=0.0, keyin=miqdor,
+                                izoh=f"Transfer ← {src.category.value if src.category else '?'}"))
+        await db.commit()
+    raise web.HTTPFound("/web/ombor-panel/transfer?msg=ok")
+
+
+# ─── 11. BUYURTMA RO'YXATI (kam qolgan mahsulotlar) ──────────────────────
+@_require_role("omborchi")
+async def ombor_buyurtma(request: web.Request):
+    sess = _current(request)
+    name = sess.get("name", "Omborchi")
+    async with AsyncSessionLocal() as db:
+        products = (await db.execute(
+            select(WarehouseProduct).where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.miqdor <= WarehouseProduct.yellow_threshold,
+            ).order_by(WarehouseProduct.miqdor.asc())
+        )).scalars().all()
+
+    kritik = [pr for pr in products if float(pr.miqdor or 0) <= float(pr.min_threshold or 0)]
+    ogoh = [pr for pr in products if pr not in kritik]
+
+    p = ['<h1>📋 Buyurtma ro\'yxati</h1>',
+         '<p class="muted">Kam qolgan va tugagan mahsulotlar</p>']
+    if not products:
+        p.append('<div class="all-clear" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);'
+                 'border-radius:16px;padding:24px;text-align:center;color:#34d399;font-weight:700">'
+                 '✅ Ombor holati yaxshi! Hamma mahsulot yetarli.</div>')
+    else:
+        if kritik:
+            p.append('<div class="card"><div class="card-head"><h2 style="color:#f87171">🔴 Tugay deyapti</h2>'
+                     '<span class="badge" style="background:#ef4444">' + str(len(kritik)) + '</span></div>')
+            for pr in kritik:
+                extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
+                sub = (CAT_LABELS.get(pr.category.value if pr.category else "", "") + (" · " + h(extra) if extra else ""))
+                p.append('<div class="row"><div style="flex:1"><div class="row-name">' + h(pr.name) + '</div>'
+                         '<div class="row-sub">' + sub + ' · min: ' + ("%.0f" % float(pr.min_threshold or 0)) + '</div></div>'
+                         '<div class="row-qty" style="color:#f87171">' + ("%.0f" % float(pr.miqdor or 0)) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
+            p.append('</div>')
+        if ogoh:
+            p.append('<div class="card"><div class="card-head"><h2 style="color:#fbbf24">🟡 Ogohlantirish</h2>'
+                     '<span class="badge">' + str(len(ogoh)) + '</span></div>')
+            for pr in ogoh:
+                extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
+                sub = (CAT_LABELS.get(pr.category.value if pr.category else "", "") + (" · " + h(extra) if extra else ""))
+                p.append('<div class="row"><div style="flex:1"><div class="row-name">' + h(pr.name) + '</div>'
+                         '<div class="row-sub">' + sub + '</div></div>'
+                         '<div class="row-qty warn">' + ("%.0f" % float(pr.miqdor or 0)) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
+            p.append('</div>')
+    return web.Response(text=_base_ombor("Buyurtma", "more", "\n".join(p), name), content_type="text/html")
+
+
+_INV_JS = (
+    '<script>'
+    'function doInv(pid){'
+    'var inp=document.getElementById("invact-"+pid);'
+    'var val=parseFloat(inp.value);'
+    'if(isNaN(val)||val<0){alert("Haqiqiy sonni kiriting");inp.focus();return;}'
+    'var btn=event.target;'
+    'fetch("/web/ombor-panel/inventar",{method:"POST",headers:{"Content-Type":"application/json"},'
+    'body:JSON.stringify({product_id:pid,haqiqiy:val})})'
+    '.then(function(r){return r.json();}).then(function(d){'
+    'if(d.ok){document.getElementById("invbot-"+pid).textContent=Math.round(d.new_miqdor);'
+    'var df=document.getElementById("invdiff-"+pid);'
+    'var f=d.farq;df.textContent=f===0?"✓ Mos keldi":("Farq: "+(f>0?"+":"")+Math.round(f));'
+    'df.style.color=f===0?"#34d399":(f>0?"#60a5fa":"#fbbf24");'
+    'inp.value="";btn.textContent="✓ Saqlandi";'
+    'setTimeout(function(){btn.textContent="✓ Saqlash";},1200);'
+    '}else{alert("Xato: "+(d.error||"?"));}'
+    '}).catch(function(e){alert("Tarmoq xatosi");});}'
+    '</script>'
+)
+
+
 # ─── Route'larni ro'yxatga olish ─────────────────────────────────────────
 def register_ombor_routes(app: web.Application):
     app.router.add_get("/web/ombor-panel", ombor_home)
@@ -765,3 +1094,8 @@ def register_ombor_routes(app: web.Application):
     app.router.add_get("/web/ombor-panel/tahrir/{id}", ombor_tahrir)
     app.router.add_post("/web/ombor-panel/tahrir/{id}", ombor_tahrir_post)
     app.router.add_get("/web/ombor-panel/ochirish/{id}", ombor_ochirish)
+    app.router.add_get("/web/ombor-panel/inventar", ombor_inventar)
+    app.router.add_post("/web/ombor-panel/inventar", ombor_inventar_post)
+    app.router.add_get("/web/ombor-panel/transfer", ombor_transfer)
+    app.router.add_post("/web/ombor-panel/transfer", ombor_transfer_post)
+    app.router.add_get("/web/ombor-panel/buyurtma", ombor_buyurtma)

@@ -504,13 +504,21 @@ class Topshiriq(Base):
     id            = Column(Integer, primary_key=True)
     worker_id     = Column(Integer, ForeignKey("users.id"), nullable=False)
     admin_id      = Column(Integer, ForeignKey("users.id"), nullable=True)
-    work_type     = Column(Enum(WorkType), nullable=False)
+    work_type     = Column(
+        Enum(WorkType, native_enum=False, length=50,
+             values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+    )
     razmer_turi   = Column(String(100), nullable=True)   # Katta/O'rta/Kichik yoki variant
     target_soni   = Column(Float, nullable=False, default=0)   # reja miqdori
     done_soni     = Column(Float, nullable=False, default=0)   # bajarilgan miqdor
     product_id    = Column(Integer, ForeignKey("warehouse_products.id"), nullable=True)  # bog'langan material
     deadline      = Column(Date, nullable=True)
-    status        = Column(Enum(TopshiriqStatus), default=TopshiriqStatus.tayinlangan, nullable=False)
+    status        = Column(
+        Enum(TopshiriqStatus, native_enum=False, length=20,
+             values_callable=lambda obj: [e.value for e in obj]),
+        default=TopshiriqStatus.tayinlangan, nullable=False,
+    )
     izoh          = Column(Text, nullable=True)
     work_entry_id = Column(Integer, ForeignKey("work_entries.id"), nullable=True)  # bajarilganda yaratilgan ish
     created_at    = Column(DateTime, server_default=func.now())
