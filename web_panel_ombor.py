@@ -38,6 +38,7 @@ def _base_ombor(title: str, active: str, content: str, name: str = "Omborchi") -
         ("home", "🏠", "Bosh", "/web/ombor-panel"),
         ("ops", "➕", "Kirim/Chiqim", "/web/ombor-panel/operatsiya"),
         ("cats", "📦", "Bo'limlar", "/web/ombor-panel/bolimlar"),
+        ("report", "📊", "Hisobot", "/web/ombor-panel/hisobot"),
         ("history", "📋", "Tarix", "/web/ombor-panel/tarix"),
     ]
     nav_html = ""
@@ -653,12 +654,111 @@ _ADD_CSS = """
 """
 
 
+# ─── 8. HISOBOT (kirim/chiqim, ombor holati) ─────────────────────────────
+@_require_role("omborchi")
+async def ombor_hisobot(request: web.Request):
+    sess = _current(request)
+    name = sess.get("name", "Omborchi")
+    period = request.query.get("period", "week")
+    today = date.today()
+    if period == "today":
+        start = today; plabel = "Bugun"
+    elif period == "month":
+        start = today.replace(day=1); plabel = "Bu oy"
+    else:
+        from datetime import timedelta
+        start = today - timedelta(days=7); plabel = "So'nggi 7 kun"
+
+    async with AsyncSessionLocal() as db:
+        # Kirim/chiqim jami (davr bo'yicha)
+        logs = (await db.execute(
+            select(WarehouseLog).where(func.date(WarehouseLog.created_at) >= start)
+        )).scalars().all()
+        total_kirim = sum(float(l.miqdor or 0) for l in logs if (float(l.keyin or 0) - float(l.oldin or 0)) > 0)
+        total_chiqim = sum(float(l.miqdor or 0) for l in logs if (float(l.keyin or 0) - float(l.oldin or 0)) < 0)
+        op_count = len(logs)
+
+        # Bo'limlar bo'yicha joriy holat
+        cat_rows = (await db.execute(
+            select(
+                WarehouseProduct.category,
+                func.count(WarehouseProduct.id),
+                func.coalesce(func.sum(WarehouseProduct.miqdor), 0),
+                sf.sum(sa_case((WarehouseProduct.miqdor <= WarehouseProduct.min_threshold, 1), else_=0)),
+            ).where(WarehouseProduct.is_active == True).group_by(WarehouseProduct.category)
+        )).all()
+        cats = [(r[0].value if r[0] else "?", int(r[1] or 0), float(r[2] or 0), int(r[3] or 0)) for r in cat_rows]
+
+        total_items = sum(c[1] for c in cats)
+        total_units = sum(c[2] for c in cats)
+        total_low = sum(c[3] for c in cats)
+
+        # Eng faol mahsulotlar (ko'p harakatlangan)
+        active_rows = (await db.execute(
+            select(WarehouseProduct.name, func.count(WarehouseLog.id))
+            .join(WarehouseLog, WarehouseLog.product_id == WarehouseProduct.id)
+            .where(func.date(WarehouseLog.created_at) >= start)
+            .group_by(WarehouseProduct.id, WarehouseProduct.name)
+            .order_by(func.count(WarehouseLog.id).desc()).limit(6)
+        )).all()
+
+    p = []
+    p.append('<h1>Hisobotlar</h1>')
+    p.append('<p class="muted">' + plabel + '</p>')
+
+    # Davr filtri
+    p.append('<div class="chips">')
+    for key, label in [("today", "Bugun"), ("week", "Hafta"), ("month", "Oy")]:
+        on = "chip-on" if period == key else ""
+        p.append('<a href="/web/ombor-panel/hisobot?period=' + key + '" class="chip ' + on + '">' + label + '</a>')
+    p.append('</div>')
+
+    # Kirim/chiqim KPI
+    p.append('<div class="card"><div class="card-head"><h2>📈 Harakat (' + plabel + ')</h2></div>')
+    p.append('<div class="kpi-grid">')
+    p.append('<div class="kpi"><div class="kpi-num kpi-green">+' + ("%.0f" % total_kirim) + '</div><div class="kpi-lbl">Kirim</div></div>')
+    p.append('<div class="kpi"><div class="kpi-num kpi-red">−' + ("%.0f" % total_chiqim) + '</div><div class="kpi-lbl">Chiqim</div></div>')
+    p.append('<div class="kpi"><div class="kpi-num kpi-blue">' + str(op_count) + '</div><div class="kpi-lbl">Operatsiya</div></div>')
+    p.append('</div></div>')
+
+    # Ombor umumiy holati
+    p.append('<div class="card"><div class="card-head"><h2>📦 Ombor holati</h2></div>')
+    p.append('<div class="kpi-grid">')
+    p.append('<div class="kpi"><div class="kpi-num kpi-blue">' + str(total_items) + '</div><div class="kpi-lbl">Tur</div></div>')
+    p.append('<div class="kpi"><div class="kpi-num kpi-green">' + ("%.0f" % total_units) + '</div><div class="kpi-lbl">Jami birlik</div></div>')
+    p.append('<div class="kpi"><div class="kpi-num kpi-orange">' + str(total_low) + '</div><div class="kpi-lbl">Kam qolgan</div></div>')
+    p.append('</div></div>')
+
+    # Bo'limlar bo'yicha jadval
+    p.append('<div class="card"><div class="card-head"><h2>🏭 Bo\'limlar bo\'yicha</h2></div>')
+    if cats:
+        for ck, cnt, units, low in cats:
+            warn = (' · <span style="color:#fbbf24">⚠️ ' + str(low) + ' kam</span>') if low else ''
+            p.append('<div class="row"><div style="flex:1"><div class="row-name">' + CAT_LABELS.get(ck, ck) + '</div>'
+                     '<div class="row-sub">' + str(cnt) + ' tur' + warn + '</div></div>'
+                     '<div class="row-qty">' + ("%.0f" % units) + ' <span>birlik</span></div></div>')
+    else:
+        p.append('<p class="empty">Ma\'lumot yo\'q</p>')
+    p.append('</div>')
+
+    # Eng faol mahsulotlar
+    if active_rows:
+        p.append('<div class="card"><div class="card-head"><h2>🔥 Eng faol mahsulotlar</h2></div>')
+        for nm, c in active_rows:
+            p.append('<div class="row"><div style="flex:1"><div class="row-name">' + h(nm) + '</div></div>'
+                     '<div class="row-qty">' + str(int(c)) + ' <span>operatsiya</span></div></div>')
+        p.append('</div>')
+
+    return web.Response(text=_base_ombor("Hisobot", "report", "\n".join(p), name), content_type="text/html")
+
+
 # ─── Route'larni ro'yxatga olish ─────────────────────────────────────────
 def register_ombor_routes(app: web.Application):
     app.router.add_get("/web/ombor-panel", ombor_home)
     app.router.add_get("/web/ombor-panel/operatsiya", ombor_operatsiya)
     app.router.add_get("/web/ombor-panel/bolimlar", ombor_bolimlar)
     app.router.add_get("/web/ombor-panel/bolim/{cat}", ombor_bolim)
+    app.router.add_get("/web/ombor-panel/hisobot", ombor_hisobot)
     app.router.add_get("/web/ombor-panel/tarix", ombor_tarix)
     app.router.add_get("/web/ombor-panel/qoshish", ombor_qoshish)
     app.router.add_post("/web/ombor-panel/qoshish", ombor_qoshish_post)

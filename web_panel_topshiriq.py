@@ -22,28 +22,42 @@ from web_panel import _base, _require_role, _current, h
 @_require_role("admin")
 async def topshiriqlar(request: web.Request):
     flt = request.query.get("status", "faol")
-    async with AsyncSessionLocal() as db:
-        stmt = (
-            select(Topshiriq, User)
-            .join(User, User.id == Topshiriq.worker_id)
-            .order_by(Topshiriq.created_at.desc())
-        )
-        if flt == "faol":
-            stmt = stmt.where(Topshiriq.status.in_([TopshiriqStatus.tayinlangan, TopshiriqStatus.qisman]))
-        elif flt == "qisman":
-            stmt = stmt.where(Topshiriq.status == TopshiriqStatus.qisman)
-        elif flt == "yakunlangan":
-            stmt = stmt.where(Topshiriq.status.in_([TopshiriqStatus.bajarilgan, TopshiriqStatus.yakunlangan]))
-        rows = (await db.execute(stmt.limit(100))).all()
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = (
+                select(Topshiriq, User)
+                .join(User, User.id == Topshiriq.worker_id)
+                .order_by(Topshiriq.created_at.desc())
+            )
+            if flt == "faol":
+                stmt = stmt.where(Topshiriq.status.in_([TopshiriqStatus.tayinlangan, TopshiriqStatus.qisman]))
+            elif flt == "qisman":
+                stmt = stmt.where(Topshiriq.status == TopshiriqStatus.qisman)
+            elif flt == "yakunlangan":
+                stmt = stmt.where(Topshiriq.status.in_([TopshiriqStatus.bajarilgan, TopshiriqStatus.yakunlangan]))
+            rows = (await db.execute(stmt.limit(100))).all()
 
-        # Statistika
-        cnt_active = int((await db.execute(
-            select(func.count(Topshiriq.id)).where(
-                Topshiriq.status.in_([TopshiriqStatus.tayinlangan, TopshiriqStatus.qisman]))
-        )).scalar() or 0)
-        cnt_partial = int((await db.execute(
-            select(func.count(Topshiriq.id)).where(Topshiriq.status == TopshiriqStatus.qisman)
-        )).scalar() or 0)
+            cnt_active = int((await db.execute(
+                select(func.count(Topshiriq.id)).where(
+                    Topshiriq.status.in_([TopshiriqStatus.tayinlangan, TopshiriqStatus.qisman]))
+            )).scalar() or 0)
+            cnt_partial = int((await db.execute(
+                select(func.count(Topshiriq.id)).where(Topshiriq.status == TopshiriqStatus.qisman)
+            )).scalar() or 0)
+    except Exception as e:
+        content = (
+            '<h1>📋 Topshiriqlar</h1>'
+            '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);'
+            'border-radius:12px;padding:20px;margin-top:16px">'
+            '<b style="color:#f87171">⚠️ Topshiriqlar jadvali hali bazada yaratilmagan.</b>'
+            '<p style="color:var(--muted);margin-top:10px">Railway\'da quyidagini bajaring:<br>'
+            '1. Deployments → oxirgi deploy tugaganini tekshiring<br>'
+            '2. Agar kerak bo\'lsa qayta deploy qiling (migrate.py jadvalni yaratadi)<br>'
+            '3. Yoki menga xabar bering — qo\'lda yarataylik</p>'
+            '<p style="color:var(--muted);font-size:12px;margin-top:8px">Texnik: ' + h(str(e)[:120]) + '</p>'
+            '</div>'
+        )
+        return web.Response(text=_base("Topshiriqlar", "topshiriqlar", content), content_type="text/html")
 
     STATUS_BADGE = {
         "tayinlangan": ("Tayinlangan", "#3b82f6"),
