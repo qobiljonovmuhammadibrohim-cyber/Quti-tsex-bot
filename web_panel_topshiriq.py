@@ -11,9 +11,9 @@ from sqlalchemy import select, func
 from database.db import AsyncSessionLocal
 from database.models import (
     Topshiriq, TopshiriqStatus, User, UserRole, WorkType,
-    WarehouseProduct,
+    WarehouseProduct, WorkPrice,
 )
-from constants import get_variants, get_work_name, PRICE_VARIANTS
+from constants import get_variants, get_work_name, PRICE_VARIANTS, WORK_MATERIAL_SOURCE
 
 from web_panel import _base, _require_role, _current, h
 
@@ -101,8 +101,9 @@ async def topshiriqlar(request: web.Request):
             p.append('<span class="t-badge" style="background:' + color + '">' + label + '</span>')
             p.append('</div>')
             # Progress
+            narx_txt = ((" · 💰 " + ("{:,.0f}".format(float(tp.narx))) + " so'm/dona") if tp.narx else "")
             p.append('<div class="t-prog-row"><span>' + ("%.0f" % done) + ' / ' + ("%.0f" % target) +
-                     ' dona</span><span>' + dl + '</span></div>')
+                     ' dona' + narx_txt + '</span><span>' + dl + '</span></div>')
             p.append('<div class="t-prog"><div class="t-prog-fill" style="width:' + str(min(pct, 100)) + '%"></div></div>')
             # Qisman bo'lsa — admin qarori
             if tp.status == TopshiriqStatus.qisman:
@@ -131,48 +132,117 @@ async def topshiriq_yangi(request: web.Request):
             select(WarehouseProduct).where(WarehouseProduct.is_active == True)
             .order_by(WarehouseProduct.name.asc())
         )).scalars().all()
+        prices = (await db.execute(
+            select(WorkPrice).where(WorkPrice.is_active == True)
+        )).scalars().all()
+
+    # Narxlar xaritasi: {work_type: {variant|"_": narx}}
+    price_map = {}
+    for pr in prices:
+        wt = pr.work_type.value if pr.work_type else None
+        if not wt:
+            continue
+        key = pr.razmer_turi or "_"
+        price_map.setdefault(wt, {})[key] = float(pr.narx or 0)
 
     # JS uchun ma'lumotlar
     variants_js = json.dumps(PRICE_VARIANTS, ensure_ascii=False)
+    prices_js = json.dumps(price_map, ensure_ascii=False)
+    matsrc_js = json.dumps(WORK_MATERIAL_SOURCE, ensure_ascii=False)
+    # Mahsulot: id → {name, miqdor, birlik, cat, tur, razmer}
     prod_js = json.dumps(
-        {str(pr.id): {"name": pr.name, "miqdor": float(pr.miqdor or 0), "birlik": pr.birlik or "dona"}
+        {str(pr.id): {"name": pr.name, "miqdor": float(pr.miqdor or 0),
+                      "birlik": pr.birlik or "dona",
+                      "cat": (pr.category.value if pr.category else ""),
+                      "tur": (pr.tur or ""),
+                      "razmer": pr.razmer or ""}
          for pr in products}, ensure_ascii=False
     )
 
     worker_opts = "".join('<option value="' + str(w.id) + '">' + h(w.full_name) + '</option>' for w in workers)
     wt_opts = "".join('<option value="' + wt.value + '">' + get_work_name(wt.value) + '</option>' for wt in WorkType)
-    prod_opts = '<option value="">— material tanlanmagan —</option>'
-    for pr in products:
-        extra = (" (" + h(pr.razmer) + ")") if pr.razmer else ""
-        prod_opts += ('<option value="' + str(pr.id) + '">' + h(pr.name) + extra +
-                      ' — ' + ("%.0f" % float(pr.miqdor or 0)) + ' ' + h(pr.birlik or "dona") + '</option>')
 
     p = []
     p.append('<h1>➕ Yangi topshiriq</h1>')
     p.append('<p style="color:var(--muted);margin-bottom:16px">Ishchiga vazifa bering</p>')
     p.append('<form method="post" action="/web/topshiriqlar/yangi" class="t-form">')
     p.append('<label>Ishchi *</label><select name="worker_id" class="t-fld" required>' + worker_opts + '</select>')
-    p.append('<label>Ish turi *</label><select name="work_type" id="wt" class="t-fld" onchange="updVariants()" required>' + wt_opts + '</select>')
-    p.append('<label>Razmer / variant</label><select name="razmer_turi" id="variant" class="t-fld"></select>')
-    p.append('<label>Reja miqdori (nechta) *</label><input name="target_soni" id="target" type="number" step="any" min="1" class="t-fld" oninput="checkMat()" required>')
-    p.append('<label>Material (ombor mahsuloti)</label><select name="product_id" id="prod" class="t-fld" onchange="checkMat()">' + prod_opts + '</select>')
+    p.append('<label>Ish turi *</label><select name="work_type" id="wt" class="t-fld" onchange="onWtChange()" required>' + wt_opts + '</select>')
+    p.append('<label>Razmer / variant</label><select name="razmer_turi" id="variant" class="t-fld" onchange="updNarx()"></select>')
+    p.append('<label>Reja miqdori (nechta) *</label><input name="target_soni" id="target" type="number" step="any" min="1" class="t-fld" oninput="checkMat();updJami()" required>')
+    p.append('<label>Bir dona narxi (so\'m) — oyligiga qo\'shiladi *</label>'
+             '<input name="narx" id="narx" type="number" step="any" min="0" class="t-fld" oninput="updJami()" required>')
+    p.append('<div id="jami-box" class="jami-box"></div>')
+    p.append('<label>Material (ombor mahsuloti) <span id="matlbl" style="color:var(--muted);font-weight:400"></span></label>'
+             '<select name="product_id" id="prod" class="t-fld" onchange="checkMat()"></select>')
     p.append('<div id="mat-check" class="mat-check"></div>')
     p.append('<label>Muddat (ixtiyoriy)</label><input name="deadline" type="date" class="t-fld">')
     p.append('<label>Izoh (ixtiyoriy)</label><input name="izoh" class="t-fld" placeholder="Qo\'shimcha ko\'rsatma">')
     p.append('<button class="t-save">💾 Topshiriq berish</button>')
     p.append('</form>')
 
-    # JS
+    # CAT_LABELS JS uchun (material guruh nomi)
+    cat_labels_js = json.dumps({
+        "rulon": "Rulonlar", "gofra": "Gofralar", "gofra_zagatovka": "Zagatovka",
+        "xromazes": "Xromazes", "laminat_xromazes": "Laminat", "yarim_tayyor": "Yarim tayyor",
+        "qolip": "Qoliplar", "tayyor_mahsulot": "Tayyor", "adyol_zapchast": "Adyol zapchast",
+        "uskuna_zapchast": "Stanok ehtiyot",
+    }, ensure_ascii=False)
+
     js = (
         '<script>'
         'var VARIANTS=' + variants_js + ';'
+        'var PRICES=' + prices_js + ';'
         'var PRODS=' + prod_js + ';'
+        'var MATSRC=' + matsrc_js + ';'
+        'var CATLBL=' + cat_labels_js + ';'
+        # Ish turi o'zgarganda: variant + narx + material filtr
+        'function onWtChange(){updVariants();updMaterials();}'
         'function updVariants(){'
         'var wt=document.getElementById("wt").value;'
         'var sel=document.getElementById("variant");'
         'var vs=VARIANTS[wt]||["Standart"];'
         'sel.innerHTML="";'
         'vs.forEach(function(v){var o=document.createElement("option");o.value=v;o.textContent=v;sel.appendChild(o);});'
+        'updNarx();'
+        '}'
+        # Narxni avtomatik to'ldirish (WorkPrice dan)
+        'function updNarx(){'
+        'var wt=document.getElementById("wt").value;'
+        'var v=document.getElementById("variant").value;'
+        'var pm=PRICES[wt]||{};'
+        'var n=pm[v];if(n===undefined)n=pm["_"];if(n===undefined)n=0;'
+        'document.getElementById("narx").value=n;updJami();'
+        '}'
+        # Jami summani ko'rsatish
+        'function updJami(){'
+        'var n=parseFloat(document.getElementById("narx").value)||0;'
+        'var t=parseFloat(document.getElementById("target").value)||0;'
+        'var box=document.getElementById("jami-box");'
+        'if(n>0&&t>0){box.className="jami-box jami-on";'
+        'box.innerHTML="💰 To\'liq bajarsa: "+t+" × "+n.toLocaleString()+" = <b>"+(t*n).toLocaleString()+" so\'m</b>";'
+        '}else{box.innerHTML="";box.className="jami-box";}'
+        '}'
+        # Material — faqat shu ishga oid manba (kategoriya + tur), soni bilan
+        'function updMaterials(){'
+        'var wt=document.getElementById("wt").value;'
+        'var src=MATSRC[wt];'
+        'var sel=document.getElementById("prod");'
+        'var lbl=document.getElementById("matlbl");'
+        'sel.innerHTML="<option value=\\"\\">— material tanlanmagan —</option>";'
+        'if(!src){lbl.textContent="(bu ish uchun material kerak emas)";document.getElementById("mat-check").innerHTML="";return;}'
+        'var catName=CATLBL[src.cat]||src.cat;'
+        'lbl.textContent="(faqat: "+catName+(src.tur?" / shu ishga oid":"")+")";'
+        'var cnt=0;'
+        'for(var pid in PRODS){var pr=PRODS[pid];'
+        'if(pr.cat!==src.cat)continue;'
+        'if(src.tur&&pr.tur!==src.tur)continue;'
+        'var o=document.createElement("option");o.value=pid;'
+        'var ex=pr.razmer?(" "+pr.razmer):"";'
+        'o.textContent=pr.name+ex+" — "+Math.round(pr.miqdor)+" "+pr.birlik+" mavjud";'
+        'sel.appendChild(o);cnt++;}'
+        'if(cnt===0){var o2=document.createElement("option");o2.value="";o2.textContent="(omborda bu turdagi mahsulot yo\\u0027q)";sel.appendChild(o2);}'
+        'document.getElementById("mat-check").innerHTML="";'
         '}'
         'function checkMat(){'
         'var pid=document.getElementById("prod").value;'
@@ -181,14 +251,12 @@ async def topshiriq_yangi(request: web.Request):
         'if(!pid){box.innerHTML="";return;}'
         'var pr=PRODS[pid];if(!pr){box.innerHTML="";return;}'
         'if(tgt<=0){box.innerHTML="";return;}'
-        'if(pr.miqdor>=tgt){'
-        'box.className="mat-check mat-ok";'
+        'if(pr.miqdor>=tgt){box.className="mat-check mat-ok";'
         'box.innerHTML="✅ "+pr.name+": "+Math.round(pr.miqdor)+" "+pr.birlik+" bor — yetarli";'
-        '}else{'
-        'box.className="mat-check mat-warn";'
+        '}else{box.className="mat-check mat-warn";'
         'box.innerHTML="⚠️ "+pr.name+": faqat "+Math.round(pr.miqdor)+" "+pr.birlik+" bor — "+Math.round(tgt-pr.miqdor)+" yetishmaydi!";'
         '}}'
-        'updVariants();'
+        'onWtChange();'
         '</script>'
     )
     p.append(js)
@@ -208,6 +276,11 @@ async def topshiriq_yangi_post(request: web.Request):
         return web.HTTPFound("/web/topshiriqlar/yangi")
     if target <= 0:
         return web.HTTPFound("/web/topshiriqlar/yangi")
+
+    try:
+        narx = float(data.get("narx") or 0)
+    except (ValueError, TypeError):
+        narx = 0
 
     variant = (data.get("razmer_turi") or "").strip() or None
     if variant == "Standart":
@@ -232,6 +305,7 @@ async def topshiriq_yangi_post(request: web.Request):
             work_type=work_type,
             razmer_turi=variant,
             target_soni=target,
+            narx=narx,
             done_soni=0,
             product_id=product_id,
             deadline=deadline,
@@ -311,6 +385,9 @@ _TASK_CSS = """
 .mat-check { margin-top:8px; padding:0; font-size:14px; font-weight:600 }
 .mat-check.mat-ok { padding:12px; border-radius:10px; background:rgba(16,185,129,0.12); color:#34d399 }
 .mat-check.mat-warn { padding:12px; border-radius:10px; background:rgba(245,158,11,0.12); color:#fbbf24 }
+.jami-box { margin-top:8px; font-size:14px; color:var(--muted) }
+.jami-box.jami-on { padding:12px; border-radius:10px; background:rgba(99,102,241,0.12); color:#a5b4fc; font-weight:600 }
+.jami-box b { color:#fff }
 </style>
 """
 

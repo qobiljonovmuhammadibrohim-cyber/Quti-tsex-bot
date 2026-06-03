@@ -284,3 +284,32 @@ def get_variants(work_type_value: str) -> list:
 def get_work_name(work_type_value: str) -> str:
     """Ish turi nomini qaytaradi."""
     return WORK_TYPE_NAMES.get(work_type_value, work_type_value.replace("_", " ").title())
+
+# Ish turi → material MANBASI (kategoriya + tur).
+# Admin topshiriq berganda omborning shu turdagi mavjud mahsulotlari (soni bilan) ko'rinadi.
+# tur=None bo'lsa — butun kategoriya ko'rinadi (xom bosqichlar uchun).
+WORK_MATERIAL_SOURCE = {
+    # Yarim tayyor mahsulotlardan (o'ziga xos tur bilan)
+    "tiger_kesish":    {"cat": "yarim_tayyor", "tur": "tiger_uchun"},
+    "gofra_kiley":     {"cat": "yarim_tayyor", "tur": "gofra_kley_uchun"},
+    "stepler_tikish":  {"cat": "yarim_tayyor", "tur": "stepler_uchun"},
+    "rulonga_salafan": {"cat": "yarim_tayyor", "tur": "salafan_uchun"},
+    "yopishtirma":     {"cat": "yarim_tayyor", "tur": "yopish_uchun"},
+    "adyol_tikish":    {"cat": "yarim_tayyor", "tur": "adyol_tikish_uchun"},
+    "diplomat_tikish": {"cat": "yarim_tayyor", "tur": "pastel_tikish_uchun"},
+    "adyol_qoqish":    {"cat": "yarim_tayyor", "tur": "adyol_qoqish_uchun"},
+    "pastel_qoqish":   {"cat": "yarim_tayyor", "tur": "pastel_qoqish_uchun"},
+    # Xom bosqichlar (butun kategoriya)
+    "gofra_ishlab":    {"cat": "rulon", "tur": None},
+    "list_qogoz":      {"cat": "rulon", "tur": None},
+    "rulon_orash":     {"cat": "rulon", "tur": None},
+    "laminatsiya":     {"cat": "xromazes", "tur": None},
+    "zagatovka":       {"cat": "laminat_xromazes", "tur": None},
+    "rulon_ishlab":    None,   # material yo'q — yangi rulon yaratadi
+}
+
+
+def get_material_source(work_type_value: str):
+    """Ish turiga oid material manbasi: {'cat':..., 'tur':...} yoki None."""
+    return WORK_MATERIAL_SOURCE.get(work_type_value)
+

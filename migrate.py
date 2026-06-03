@@ -38,6 +38,10 @@ async def migrate():
 
     migrations = [
         (
+            "topshiriq_narx",
+            "ALTER TABLE topshiriqlar ADD COLUMN IF NOT EXISTS narx FLOAT;",
+        ),
+        (
             "worktype_rulon_ishlab",
             "ALTER TYPE worktype ADD VALUE IF NOT EXISTS 'rulon_ishlab';",
         ),

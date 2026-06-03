@@ -511,6 +511,7 @@ class Topshiriq(Base):
     )
     razmer_turi   = Column(String(100), nullable=True)   # Katta/O'rta/Kichik yoki variant
     target_soni   = Column(Float, nullable=False, default=0)   # reja miqdori
+    narx          = Column(Float, nullable=True)   # bir dona uchun narx (oyligiga qo'shiladi)
     done_soni     = Column(Float, nullable=False, default=0)   # bajarilgan miqdor
     product_id    = Column(Integer, ForeignKey("warehouse_products.id"), nullable=True)  # bog'langan material
     deadline      = Column(Date, nullable=True)

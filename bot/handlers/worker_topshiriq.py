@@ -132,7 +132,8 @@ async def _complete_task(event, db: AsyncSession, tp: Topshiriq, soni: float, fu
     """WorkEntry yaratadi, material kamaytiradi, nazoratchiga yuboradi."""
     bot = event.bot
     # Narxni hisoblash (variant bo'yicha)
-    narx = await get_price(db, tp.work_type, tp.razmer_turi) or 0
+    # Narx: admin topshiriqda belgilagan narx (bo'lmasa — standart WorkPrice)
+    narx = tp.narx if (tp.narx is not None and float(tp.narx) > 0) else (await get_price(db, tp.work_type, tp.razmer_turi) or 0)
     jami = round(soni * float(narx))
 
     # WorkEntry yaratish (nazoratchiga boradi)
