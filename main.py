@@ -51,6 +51,8 @@ async def main():
     dp.include_router(orders.router)
     dp.include_router(goals.router)
     await init_db()
+    from database.db import run_startup_migrations
+    await run_startup_migrations()
     logger.info("DB tayyor!")
     sched = setup_scheduler(bot)
     sched.start()

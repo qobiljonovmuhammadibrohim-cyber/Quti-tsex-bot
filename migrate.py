@@ -34,7 +34,18 @@ async def migrate():
     if url.startswith("postgresql+asyncpg://"):
         url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
 
-    conn = await asyncpg.connect(url)
+    # DATABASE_URL env o'rnatilmagan bo'lsa (localhost default) — crash qilmaymiz.
+    # Migration'lar startup'da (main.py) baribir bajariladi.
+    if "localhost" in url or "user:password@" in url:
+        print("⚠️  DATABASE_URL topilmadi (Pre-Deploy). Migration startup'da bajariladi.")
+        return
+
+    try:
+        conn = await asyncpg.connect(url)
+    except Exception as e:
+        print(f"⚠️  Bazaga ulanib bo'lmadi: {str(e)[:100]}")
+        print("    Migration startup'da (main.py) bajariladi. Deploy davom etadi.")
+        return
 
     migrations = [
         (
