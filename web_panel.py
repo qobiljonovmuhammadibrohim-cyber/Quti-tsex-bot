@@ -5925,8 +5925,9 @@ adyol_zapchast,IP,,,,,100,10,50
 tayyor_mahsulot,Tayyor Adyol karobka,Katta,,,dona,0,2,10</pre>
 
 <form method="POST" enctype="multipart/form-data">
-<label>📁 CSV fayl yuklash:</label>
-<input type="file" name="csv_file" accept=".csv,.txt"><br>
+<label>📁 Fayl yuklash (Excel .xlsx yoki .csv):</label>
+<input type="file" name="csv_file" accept=".csv,.txt,.xlsx"><br>
+<div class="info">💡 Excel shablonni to'ldirib yuklang — eng tez yo'l. Shablonni adminдан so'rang yoki tayyor faylni ishlating.</div>
 
 <div class="warn">⚠️ Yoki pastdagi maydonga CSV matnini to'g'ridan kiriting:</div>
 <label>📝 CSV matni:</label>
@@ -5944,6 +5945,7 @@ yarim_tayyor,Misol mahsulot,Katta,,adyol_tikish_uchun,dona,100,5,20"></textarea>
 
     reader_mp = await request.multipart()
     csv_text = ""
+    xlsx_rows = None
     while True:
         field = await reader_mp.next()
         if field is None:
@@ -5951,17 +5953,56 @@ yarim_tayyor,Misol mahsulot,Katta,,adyol_tikish_uchun,dona,100,5,20"></textarea>
         if field.name == "csv_file":
             raw = await field.read()
             if raw:
-                csv_text = raw.decode("utf-8-sig", errors="replace")
+                fname = (field.filename or "").lower()
+                if fname.endswith(".xlsx") or raw[:2] == b"PK":
+                    # Excel fayl — openpyxl bilan o'qiymiz
+                    try:
+                        import io
+                        from openpyxl import load_workbook
+                        wb = load_workbook(io.BytesIO(raw), data_only=True, read_only=True)
+                        ws = wb["Mahsulotlar"] if "Mahsulotlar" in wb.sheetnames else wb.active
+                        xlsx_rows = []
+                        for row in ws.iter_rows(values_only=True):
+                            xlsx_rows.append(row)
+                    except Exception as e:
+                        xlsx_rows = None
+                        csv_text = ""
+                else:
+                    csv_text = raw.decode("utf-8-sig", errors="replace")
         elif field.name == "csv_text":
             raw = await field.read()
-            if raw and not csv_text:
+            if raw and not csv_text and xlsx_rows is None:
                 csv_text = raw.decode("utf-8-sig", errors="replace")
 
-    if not csv_text.strip():
+    if not csv_text.strip() and not xlsx_rows:
         raise web.HTTPFound("/web/warehouse/csv-import")
 
     from sqlalchemy import select as _sel
     valid_cats = {c.value for c in ProductCategory}
+
+    # Excel qatorlarini CSV matnga aylantirib, bir xil quvurdan o'tkazamiz
+    if xlsx_rows:
+        EXPECTED = ["category", "name", "tur", "qism", "razmer", "rang", "gramaj", "birlik", "miqdor", "min_threshold", "yellow_threshold"]
+        ncol = len(EXPECTED)
+        lines = [",".join(EXPECTED)]
+        for row in xlsx_rows:
+            if row is None:
+                continue
+            vals = ["" if v is None else str(v).strip() for v in row][:ncol]
+            if not any(vals):
+                continue
+            first = vals[0].lower() if vals else ""
+            # Sarlavha / izoh / namuna qatorlarini o'tkazib yuboramiz
+            if first in ("category", "bo'lim*", "bo'lim", "bolim"):
+                continue
+            # faqat haqiqiy kategoriya bo'lsa qabul qilamiz
+            if first not in valid_cats:
+                continue
+            while len(vals) < ncol:
+                vals.append("")
+            safe = ['"' + v.replace('"', '""') + '"' for v in vals]
+            lines.append(",".join(safe))
+        csv_text = "\n".join(lines)
 
     added   = 0
     skipped = 0
@@ -5987,7 +6028,14 @@ yarim_tayyor,Misol mahsulot,Katta,,adyol_tikish_uchun,dona,100,5,20"></textarea>
                 razmer   = _normalize_razmer(row.get("razmer", "").strip() or None)
                 rang     = row.get("rang",    "").strip() or None
                 tur      = row.get("tur",     "").strip() or None
+                qism     = (row.get("qism", "") or "").strip().lower() or None
                 birlik   = row.get("birlik",  "dona").strip() or "dona"
+                # gramaj — qalinlik maydoniga
+                _gram_raw = (row.get("gramaj", "") or row.get("qalinlik", "") or "").replace(",", ".").strip()
+                try:
+                    qalinlik = float(_gram_raw) if _gram_raw else None
+                except ValueError:
+                    qalinlik = None
                 miqdor   = float((row.get("miqdor",          "0") or "0").replace(",", "."))
                 min_t    = float((row.get("min_threshold",   "2") or "2").replace(",", "."))
                 yellow_t = float((row.get("yellow_threshold","5") or "5").replace(",", "."))
@@ -6001,6 +6049,7 @@ yarim_tayyor,Misol mahsulot,Katta,,adyol_tikish_uchun,dona,100,5,20"></textarea>
                 if razmer: q = q.where(WarehouseProduct.razmer == razmer)
                 if rang:   q = q.where(WarehouseProduct.rang   == rang)
                 if tur:    q = q.where(WarehouseProduct.tur    == tur)
+                if qism:   q = q.where(WarehouseProduct.qism   == qism)
 
                 existing = (await db.execute(q.limit(1))).scalar_one_or_none()
                 if existing:
@@ -6009,7 +6058,8 @@ yarim_tayyor,Misol mahsulot,Katta,,adyol_tikish_uchun,dona,100,5,20"></textarea>
 
                 db.add(WarehouseProduct(
                     category=cat, name=name,
-                    razmer=razmer, rang=rang, tur=tur,
+                    razmer=razmer, rang=rang, tur=tur, qism=qism,
+                    qalinlik=qalinlik,
                     birlik=birlik, miqdor=miqdor,
                     min_threshold=min_t,
                     yellow_threshold=yellow_t,
@@ -6079,20 +6129,21 @@ _CAT_CFG = {
     },
     "xromazes": {
         "title": "🖨️ Xromazeslar",
-        "turlar": {"adyol_pastel":"🛏 Adyol/Pastel","poyabzal":"👟 Poyabzal","shirinlik":"🍰 Shirinlik","fast_food":"🍔 Fast food","boshqa":"📝 Boshqa"},
+        "turlar": {"adyol":"🛏 Adyol","pastel":"💼 Pastel","poyabzal":"👟 Poyabzal","shirinlik":"🍰 Shirinlik","fast_food":"🍔 Fast food","boshqa":"📝 Boshqa"},
         "extra_cols": [("Razmer","razmer"),("Rang","rang")],
     },
     "laminat_xromazes": {
         "title": "✨ Laminat xromazeslar",
-        "turlar": {"adyol_pastel":"🛏 Adyol/Pastel (laminat)","poyabzal":"👟 Poyabzal","shirinlik":"🍰 Shirinlik","fast_food":"🍔 Fast food","boshqa":"📝 Boshqa"},
+        "turlar": {"adyol":"🛏 Adyol (laminat)","pastel":"💼 Pastel (laminat)","poyabzal":"👟 Poyabzal","shirinlik":"🍰 Shirinlik","fast_food":"🍔 Fast food","boshqa":"📝 Boshqa"},
         "extra_cols": [("Razmer","razmer"),("Rang","rang")],
     },
     "yarim_tayyor": {
         "title": "🧩 Yarim tayyor",
         "turlar": {
-            "tiger_uchun":"✂️ Tiger kesish","gofra_kley_uchun":"🔨 Gofra kley",
+            "tiger_uchun":"✂️ Tiger kesish","gofra_kley_zagatovka":"🔨 Gofra kley — zagatovka","gofra_kley_xromazes":"🔨 Gofra kley — xromazes",
             "stepler_uchun":"📌 Stepler","salafan_uchun":"🎁 Salafan",
-            "yopish_uchun":"🔗 Yopish","adyol_tikish_uchun":"🧵 Adyol tikish",
+            "yopish_zagatovka":"🔗 Yopish — zagatovka","yopish_xromazes":"🔗 Yopish — xromazes",
+            "adyol_tikish_uchun":"🧵 Adyol tikish",
             "pastel_tikish_uchun":"💼 Pastel tikish","adyol_qoqish_uchun":"📫 Adyol qoqish",
             "pastel_qoqish_uchun":"📬 Pastel qoqish","xom_komple":"📦 Xom komple",
             "kapalak":"🦋 Kapalak","boshqa":"📝 Boshqa",

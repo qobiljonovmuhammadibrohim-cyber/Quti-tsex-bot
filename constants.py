@@ -291,10 +291,10 @@ def get_work_name(work_type_value: str) -> str:
 WORK_MATERIAL_SOURCE = {
     # Yarim tayyor mahsulotlardan (o'ziga xos tur bilan)
     "tiger_kesish":    {"cat": "yarim_tayyor", "tur": "tiger_uchun"},
-    "gofra_kiley":     {"cat": "yarim_tayyor", "tur": "gofra_kley_uchun"},
+    "gofra_kiley":     {"cat": "yarim_tayyor", "tur": ["gofra_kley_zagatovka", "gofra_kley_xromazes"]},
     "stepler_tikish":  {"cat": "yarim_tayyor", "tur": "stepler_uchun"},
     "rulonga_salafan": {"cat": "yarim_tayyor", "tur": "salafan_uchun"},
-    "yopishtirma":     {"cat": "yarim_tayyor", "tur": "yopish_uchun"},
+    "yopishtirma":     {"cat": "yarim_tayyor", "tur": ["yopish_zagatovka", "yopish_xromazes"]},
     "adyol_tikish":    {"cat": "yarim_tayyor", "tur": "adyol_tikish_uchun"},
     "diplomat_tikish": {"cat": "yarim_tayyor", "tur": "pastel_tikish_uchun"},
     "adyol_qoqish":    {"cat": "yarim_tayyor", "tur": "adyol_qoqish_uchun"},

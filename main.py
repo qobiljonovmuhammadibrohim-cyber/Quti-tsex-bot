@@ -29,6 +29,24 @@ def _get_storage():
     return MemoryStorage()
 
 async def main():
+    # Environment o'zgaruvchilari tekshiruvi — tushunarli xato xabari
+    from config.settings import DATABASE_URL as _DBU
+    problems = []
+    if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN":
+        problems.append("BOT_TOKEN")
+    if "localhost" in _DBU or "user:password@" in _DBU:
+        problems.append("DATABASE_URL")
+    if problems:
+        logger.error("=" * 55)
+        logger.error("❌ XATO: Railway environment o'zgaruvchilari yo'q!")
+        logger.error("   Topilmadi: %s", ", ".join(problems))
+        logger.error("   Railway → Service → Variables ga kiring va qo'shing:")
+        logger.error("     BOT_TOKEN     = (BotFather tokeni)")
+        logger.error("     DATABASE_URL  = ${{Postgres.DATABASE_URL}}")
+        logger.error("     SUPERADMIN_ID, WEB_PASSWORD, SECRET_KEY, WEB_URL")
+        logger.error("=" * 55)
+        return
+
     bot = Bot(token=BOT_TOKEN)
     dp  = Dispatcher(storage=_get_storage())
     dp.update.middleware(DbSessionMiddleware())

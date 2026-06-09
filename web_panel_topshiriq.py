@@ -236,7 +236,7 @@ async def topshiriq_yangi(request: web.Request):
         'var cnt=0;'
         'for(var pid in PRODS){var pr=PRODS[pid];'
         'if(pr.cat!==src.cat)continue;'
-        'if(src.tur&&pr.tur!==src.tur)continue;'
+        'if(src.tur){if(Array.isArray(src.tur)){if(src.tur.indexOf(pr.tur)<0)continue;}else if(pr.tur!==src.tur)continue;}'
         'var o=document.createElement("option");o.value=pid;'
         'var ex=pr.razmer?(" "+pr.razmer):"";'
         'o.textContent=pr.name+ex+" — "+Math.round(pr.miqdor)+" "+pr.birlik+" mavjud";'

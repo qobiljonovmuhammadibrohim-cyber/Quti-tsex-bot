@@ -358,28 +358,74 @@ async def ombor_bolim(request: web.Request):
     if not products:
         p.append('<p class="empty">Bu turda mahsulot yo\'q. "➕ Mahsulot qo\'shish" orqali kiriting.</p>')
     else:
+        # Qismli mahsulotlarni guruhlash: (nom, rang, tur) bir xil — bitta ramka.
+        # RAZMER guruhga kirmaydi, chunki har qism o'z razmeriga ega.
+        QISM_ORD = {"tepa": 0, "past": 1, "yon": 2, "paddo": 2}
+        QISM_LBL = {"tepa": "TEPA", "past": "PAST", "yon": "YON", "paddo": "PADDO"}
+        groups = {}
+        order = []
         for pr in products:
-            tur_label = turlar.get(pr.tur, pr.tur or "")
-            extra_parts = list(filter(None, [pr.razmer, pr.rang, pr.qism]))
-            if tur_label:
-                extra_parts.insert(0, tur_label)
-            extra = " · ".join(extra_parts)
-            miq = float(pr.miqdor or 0)
-            low = miq <= float(pr.min_threshold or 0)
-            color = "#f87171" if low else ("#34d399" if miq > 0 else "#94a3b8")
-            pid = str(pr.id)
-            p.append('<div class="op-card" id="prod-' + pid + '">')
-            p.append('<div class="op-top"><div><div class="op-name">' + h(pr.name) + '</div>')
-            if extra:
-                p.append('<div class="op-extra">' + h(extra) + '</div>')
-            p.append('</div><a href="/web/ombor-panel/tahrir/' + pid + '" class="edit-link">✏️</a>'
-                     '<div class="op-qty" style="color:' + color + '">'
-                     + ("%.0f" % miq) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
-            p.append('<div class="op-ctrl">'
-                     '<input type="number" id="amt-' + pid + '" placeholder="Miqdor" class="op-amt" step="any" min="0">'
-                     '<button class="op-b op-in-btn" onclick="doOp(' + pid + ',1)">+ Kirim</button>'
-                     '<button class="op-b op-out-btn" onclick="doOp(' + pid + ',-1)">− Chiqim</button>'
-                     '</div></div>')
+            if pr.qism:
+                key = (pr.name, pr.rang or "", pr.tur or "")
+            else:
+                key = ("__single__", str(pr.id))
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(pr)
+
+        for key in order:
+            items = groups[key]
+            if items[0].qism:
+                items.sort(key=lambda x: QISM_ORD.get(x.qism or "", 9))
+                first = items[0]
+                tur_label = turlar.get(first.tur, first.tur or "")
+                head_parts = list(filter(None, [tur_label, first.rang]))
+                p.append('<div class="frame">')
+                p.append('<div class="frame-head">' + h(first.name)
+                         + (' <span class="frame-sub">' + h(" · ".join(head_parts)) + '</span>' if head_parts else '')
+                         + '</div>')
+                for pr in items:
+                    miq = float(pr.miqdor or 0)
+                    low = miq <= float(pr.min_threshold or 0)
+                    color = "#f87171" if low else ("#34d399" if miq > 0 else "#94a3b8")
+                    pid = str(pr.id)
+                    qlbl = QISM_LBL.get(pr.qism or "", (pr.qism or "?").upper())
+                    rz = (' <span class="frame-rz">' + h(pr.razmer) + '</span>') if pr.razmer else ''
+                    p.append('<div class="frame-row" id="prod-' + pid + '">')
+                    p.append('<div class="qism-tag">' + qlbl + rz + '</div>')
+                    p.append('<div class="frame-qty" style="color:' + color + '">' + ("%.0f" % miq) +
+                             ' <span>' + h(pr.birlik or "dona") + '</span></div>')
+                    p.append('<input type="number" id="amt-' + pid + '" placeholder="0" class="frame-amt" step="any" min="0">')
+                    p.append('<button class="fb fb-in" onclick="doOp(' + pid + ',1)">+</button>')
+                    p.append('<button class="fb fb-out" onclick="doOp(' + pid + ',-1)">−</button>')
+                    p.append('<a href="/web/ombor-panel/tahrir/' + pid + '" class="frame-edit">✏️</a>')
+                    p.append('</div>')
+                p.append('</div>')
+            else:
+                pr = items[0]
+                tur_label = turlar.get(pr.tur, pr.tur or "")
+                extra_parts = list(filter(None, [pr.razmer, pr.rang]))
+                if tur_label:
+                    extra_parts.insert(0, tur_label)
+                extra = " · ".join(extra_parts)
+                miq = float(pr.miqdor or 0)
+                low = miq <= float(pr.min_threshold or 0)
+                color = "#f87171" if low else ("#34d399" if miq > 0 else "#94a3b8")
+                pid = str(pr.id)
+                p.append('<div class="op-card" id="prod-' + pid + '">')
+                p.append('<div class="op-top"><div><div class="op-name">' + h(pr.name) + '</div>')
+                if extra:
+                    p.append('<div class="op-extra">' + h(extra) + '</div>')
+                p.append('</div><a href="/web/ombor-panel/tahrir/' + pid + '" class="edit-link">✏️</a>'
+                         '<div class="op-qty" style="color:' + color + '">'
+                         + ("%.0f" % miq) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
+                p.append('<div class="op-ctrl">'
+                         '<input type="number" id="amt-' + pid + '" placeholder="Miqdor" class="op-amt" step="any" min="0">'
+                         '<button class="op-b op-in-btn" onclick="doOp(' + pid + ',1)">+ Kirim</button>'
+                         '<button class="op-b op-out-btn" onclick="doOp(' + pid + ',-1)">− Chiqim</button>'
+                         '</div></div>')
+    p.append(_FRAME_CSS)
     p.append(_OPS_JS)
     p.append(_SEC_CSS)
     return web.Response(text=_base_ombor(cfg.get("title", ck), "cats", "\n".join(p), name), content_type="text/html")
@@ -416,6 +462,25 @@ async def ombor_tarix(request: web.Request):
                      '<div class="op-d ' + cls + '">' + sign + ("%.0f" % d) + '</div></div>')
         p.append('</div>')
     return web.Response(text=_base_ombor("Tarix", "history", "\n".join(p), name), content_type="text/html")
+
+
+_FRAME_CSS = """
+<style>
+.frame { background:var(--bg2); border:2px solid var(--accent); border-radius:14px; padding:12px; margin-bottom:12px }
+.frame-head { font-weight:700; font-size:15px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--border) }
+.frame-sub { font-size:12px; color:var(--muted); font-weight:400 }
+.frame-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05) }
+.frame-row:last-child { border-bottom:none }
+.qism-tag { min-width:54px; font-size:12px; font-weight:800; color:#a5b4fc; background:rgba(99,102,241,0.15); border-radius:6px; padding:4px 6px; text-align:center }
+.frame-rz { display:block; font-size:9px; color:var(--muted); font-weight:600; margin-top:2px }
+.frame-qty { min-width:62px; font-weight:800; font-size:15px }
+.frame-qty span { font-size:10px; color:var(--muted); font-weight:400 }
+.frame-amt { width:56px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--fg); font-size:14px }
+.fb { width:34px; height:34px; border:none; border-radius:8px; font-weight:800; font-size:18px; cursor:pointer; color:#fff }
+.fb-in { background:#10b981 } .fb-out { background:#f59e0b }
+.frame-edit { text-decoration:none; font-size:17px; margin-left:auto }
+</style>
+"""
 
 
 _SEC_CSS = """
@@ -597,13 +662,44 @@ async def ombor_qoshish(request: web.Request):
     p.append('<label>Bo\'lim (kategoriya) *</label>'
              '<select name="category" id="cat" class="fld" onchange="updTur()" required>' + cat_options + '</select>')
     p.append('<label>Tur</label><select name="tur" id="tur" class="fld"></select>')
-    p.append('<label>Nomi *</label><input name="name" class="fld" placeholder="Masalan: Oq rulon 120sm" required>')
+
+    # Mahsulot ko'rinishi: Oddiy / Adyol (3 qism) / Pastel (3 qism)
+    p.append('<label>Mahsulot ko\'rinishi</label>'
+             '<select name="kind" id="kind" class="fld" onchange="updKind()">'
+             '<option value="oddiy">Oddiy (bitta mahsulot)</option>'
+             '<option value="adyol">Adyol — 3 qism (TEPA, PAST, YON)</option>'
+             '<option value="pastel">Pastel — 3 qism (TEPA, PAST, PADDO)</option>'
+             '</select>')
+
+    p.append('<label>Nomi *</label><input name="name" class="fld" placeholder="Masalan: Istanbul adyol Katta" required>')
     p.append('<div class="frow">'
-             '<div><label>Razmer</label><input name="razmer" class="fld" placeholder="120sm"></div>'
+             '<div><label>Razmer</label><input name="razmer" class="fld" placeholder="98x62"></div>'
              '<div><label>Rang</label><input name="rang" class="fld" placeholder="oq"></div></div>')
     p.append('<div class="frow">'
-             '<div><label>Birlik</label><input name="birlik" class="fld" value="dona"></div>'
-             '<div><label>Boshlang\'ich miqdor</label><input name="miqdor" type="number" step="any" class="fld" value="0"></div></div>')
+             '<div><label>Gramaj (g/m²) — rulon/gofra uchun</label><input name="gramaj" type="number" step="any" class="fld" placeholder="120"></div>'
+             '<div><label>Birlik</label><select name="birlik" class="fld">'
+             '<option value="dona">dona</option><option value="kg">kg</option>'
+             '<option value="gramm">gramm</option><option value="m3">m³</option>'
+             '<option value="metr">metr</option><option value="pachka">pachka</option>'
+             '<option value="rulon">rulon</option><option value="quti">quti</option>'
+             '</select></div></div>')
+    p.append('<div class="frow">'
+             '<div id="miqdor-box"><label>Boshlang\'ich miqdor</label><input name="miqdor" id="miqdor" type="number" step="any" class="fld" value="0"></div></div>')
+
+    # Adyol/pastel 3 qism — har qism O'Z razmeri va soni bilan
+    p.append('<div id="qism-box" style="display:none">'
+             '<div class="qism-title">Har qism — o\'z razmeri va soni:</div>'
+             '<div class="qrow"><div class="qlbl">TEPA</div>'
+             '<input name="razmer_tepa" class="fld qfld" placeholder="razmer (mas: 98x62)">'
+             '<input name="qism_tepa" type="number" step="any" class="fld qfld" placeholder="soni" value="0"></div>'
+             '<div class="qrow"><div class="qlbl">PAST</div>'
+             '<input name="razmer_past" class="fld qfld" placeholder="razmer">'
+             '<input name="qism_past" type="number" step="any" class="fld qfld" placeholder="soni" value="0"></div>'
+             '<div class="qrow"><div class="qlbl" id="q3-lbl">YON</div>'
+             '<input name="razmer_3" class="fld qfld" placeholder="razmer">'
+             '<input name="qism_3" type="number" step="any" class="fld qfld" placeholder="soni" value="0"></div>'
+             '<div class="muted2">Har qism alohida ombor yozuvi bo\'ladi, lekin bitta ramkada ko\'rinadi. Razmer bo\'sh bo\'lsa — yuqoridagi umumiy razmer ishlatiladi.</div></div>')
+
     p.append('<div class="frow">'
              '<div><label>Kam chegarasi (qizil)</label><input name="min_threshold" type="number" step="any" class="fld" value="10"></div>'
              '<div><label>Ogoh chegarasi (sariq)</label><input name="yellow_threshold" type="number" step="any" class="fld" value="20"></div></div>')
@@ -614,7 +710,12 @@ async def ombor_qoshish(request: web.Request):
              'var sel=document.getElementById("tur");var ts=TURLAR[c]||{};'
              'sel.innerHTML="<option value=\\"\\">— tur tanlanmagan —</option>";'
              'for(var k in ts){var o=document.createElement("option");o.value=k;o.textContent=ts[k];sel.appendChild(o);}}'
-             'updTur();</script>')
+             'function updKind(){var k=document.getElementById("kind").value;'
+             'var qbox=document.getElementById("qism-box");var mbox=document.getElementById("miqdor-box");'
+             'if(k==="oddiy"){qbox.style.display="none";mbox.style.display="block";}'
+             'else{qbox.style.display="block";mbox.style.display="none";'
+             'document.getElementById("q3-lbl").textContent=(k==="pastel")?"PADDO":"YON";}}'
+             'updTur();updKind();</script>')
     p.append(_ADD_CSS)
     return web.Response(text=_base_ombor("Qo'shish", "add", "\n".join(p), name), content_type="text/html")
 
@@ -636,19 +737,44 @@ async def ombor_qoshish_post(request: web.Request):
         except (ValueError, TypeError):
             return default
 
+    kind = (data.get("kind") or "oddiy").strip()
+    def _gram():
+        try:
+            g = (data.get("gramaj") or "").strip()
+            return float(g) if g else None
+        except (ValueError, TypeError):
+            return None
+    base = dict(
+        category=cat,
+        name=name_v,
+        tur=(data.get("tur") or "").strip() or None,
+        razmer=(data.get("razmer") or "").strip() or None,
+        rang=(data.get("rang") or "").strip() or None,
+        qalinlik=_gram(),
+        birlik=(data.get("birlik") or "dona").strip(),
+        min_threshold=_f("min_threshold", 10),
+        yellow_threshold=_f("yellow_threshold", 20),
+        is_active=True,
+    )
+
     async with AsyncSessionLocal() as db:
-        db.add(WarehouseProduct(
-            category=cat,
-            name=name_v,
-            tur=(data.get("tur") or "").strip() or None,
-            razmer=(data.get("razmer") or "").strip() or None,
-            rang=(data.get("rang") or "").strip() or None,
-            birlik=(data.get("birlik") or "dona").strip(),
-            miqdor=_f("miqdor", 0),
-            min_threshold=_f("min_threshold", 10),
-            yellow_threshold=_f("yellow_threshold", 20),
-            is_active=True,
-        ))
+        if kind in ("adyol", "pastel"):
+            # 3 qism — har biri O'Z razmeri bilan, alohida yozuv
+            third_qism = "paddo" if kind == "pastel" else "yon"
+            common_razmer = (data.get("razmer") or "").strip() or None
+            def _rz(key):
+                return (data.get(key) or "").strip() or common_razmer
+            qismlar = [
+                ("tepa", _rz("razmer_tepa"), _f("qism_tepa", 0)),
+                ("past", _rz("razmer_past"), _f("qism_past", 0)),
+                (third_qism, _rz("razmer_3"), _f("qism_3", 0)),
+            ]
+            for qism, rz, miq in qismlar:
+                row = dict(base)
+                row["razmer"] = rz
+                db.add(WarehouseProduct(qism=qism, miqdor=miq, **row))
+        else:
+            db.add(WarehouseProduct(miqdor=_f("miqdor", 0), **base))
         await db.commit()
     cat_key = data.get("category") or ""
     raise web.HTTPFound("/web/ombor-panel/qoshish?msg=ok&cat=" + cat_key)
@@ -674,6 +800,29 @@ async def ombor_tahrir(request: web.Request):
     p.append('<div class="frow">'
              '<div><label>Razmer</label><input name="razmer" class="fld" value="' + h(pr.razmer or "") + '"></div>'
              '<div><label>Rang</label><input name="rang" class="fld" value="' + h(pr.rang or "") + '"></div></div>')
+    # Gramaj + birlik
+    _bsel = lambda u: " selected" if (pr.birlik or "dona") == u else ""
+    p.append('<div class="frow">'
+             '<div><label>Gramaj (g/m²)</label><input name="gramaj" type="number" step="any" class="fld" value="' + (str(pr.qalinlik) if pr.qalinlik is not None else "") + '"></div>'
+             '<div><label>Birlik</label><select name="birlik" class="fld">'
+             '<option value="dona"' + _bsel("dona") + '>dona</option>'
+             '<option value="kg"' + _bsel("kg") + '>kg</option>'
+             '<option value="gramm"' + _bsel("gramm") + '>gramm</option>'
+             '<option value="m3"' + _bsel("m3") + '>m³</option>'
+             '<option value="metr"' + _bsel("metr") + '>metr</option>'
+             '<option value="pachka"' + _bsel("pachka") + '>pachka</option>'
+             '<option value="rulon"' + _bsel("rulon") + '>rulon</option>'
+             '<option value="quti"' + _bsel("quti") + '>quti</option>'
+             '</select></div></div>')
+    # Qism (agar bor bo'lsa — adyol/pastel)
+    if pr.qism:
+        _qsel = lambda q: " selected" if (pr.qism or "") == q else ""
+        p.append('<label>Qism</label><select name="qism" class="fld">'
+                 '<option value="tepa"' + _qsel("tepa") + '>TEPA</option>'
+                 '<option value="past"' + _qsel("past") + '>PAST</option>'
+                 '<option value="yon"' + _qsel("yon") + '>YON</option>'
+                 '<option value="paddo"' + _qsel("paddo") + '>PADDO</option>'
+                 '</select>')
     p.append('<div class="frow">'
              '<div><label>Kam chegarasi</label><input name="min_threshold" type="number" step="any" class="fld" value="' + str(pr.min_threshold or 0) + '"></div>'
              '<div><label>Ogoh chegarasi</label><input name="yellow_threshold" type="number" step="any" class="fld" value="' + str(pr.yellow_threshold or 0) + '"></div></div>')
@@ -706,6 +855,21 @@ async def ombor_tahrir_post(request: web.Request):
                 pr.name = nm
             pr.razmer = (data.get("razmer") or "").strip() or None
             pr.rang = (data.get("rang") or "").strip() or None
+            # Gramaj
+            _g = (data.get("gramaj") or "").strip()
+            if _g != "":
+                try:
+                    pr.qalinlik = float(_g.replace(",", "."))
+                except ValueError:
+                    pass
+            # Birlik
+            _b = (data.get("birlik") or "").strip()
+            if _b:
+                pr.birlik = _b
+            # Qism (agar formada bo'lsa)
+            _q = (data.get("qism") or "").strip()
+            if _q:
+                pr.qism = _q
             pr.min_threshold = _f("min_threshold", pr.min_threshold)
             pr.yellow_threshold = _f("yellow_threshold", pr.yellow_threshold)
             await db.commit()
@@ -736,6 +900,14 @@ _ADD_CSS = """
 .fld { padding:12px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg2); color:var(--fg); font-size:15px; width:100% }
 .frow { display:flex; gap:10px }
 .frow > div { flex:1 }
+.frow3 { display:flex; gap:8px }
+.frow3 > div { flex:1 }
+.qism-box, #qism-box { background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.3); border-radius:12px; padding:12px; margin-top:6px }
+.qism-title { font-size:13px; font-weight:700; color:#a5b4fc; margin-bottom:8px }
+.qrow { display:flex; gap:6px; align-items:center; margin-bottom:6px }
+.qlbl { min-width:50px; font-size:12px; font-weight:800; color:#a5b4fc; background:rgba(99,102,241,0.15); border-radius:6px; padding:8px 4px; text-align:center }
+.qfld { flex:1 }
+.muted2 { font-size:11px; color:var(--muted); margin-top:6px }
 .save-btn { margin-top:16px; padding:15px; border:none; border-radius:12px; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-weight:800; font-size:16px; cursor:pointer }
 .del-btn { display:block; text-align:center; margin-top:12px; padding:14px; border-radius:12px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.4); color:#f87171; text-decoration:none; font-weight:700 }
 .ok-msg { background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.4); color:#34d399; padding:14px; border-radius:12px; font-weight:700; text-align:center; margin-bottom:16px }
@@ -946,19 +1118,29 @@ async def ombor_transfer(request: web.Request):
         extra = (" (" + h(pr.razmer) + ")") if pr.razmer else ""
         src_opts += ('<option value="' + str(pr.id) + '">' + h(pr.name) + extra +
                      ' — ' + ("%.0f" % float(pr.miqdor or 0)) + ' ' + h(pr.birlik or "dona") + '</option>')
-    dst_opts = "".join('<option value="' + ck + '">' + label + '</option>' for ck, label in CAT_LABELS.items())
+    dst_opts = "".join('<option value="' + ck + '">' + cfg.get("title", ck) + '</option>' for ck, cfg in _CAT_CFG.items())
+    import json as _json
+    turlar_js = _json.dumps({ck: cfg.get("turlar", {}) for ck, cfg in _CAT_CFG.items()}, ensure_ascii=False)
 
     p = ['<h1>🔄 Transfer (zanjir)</h1>',
-         '<p class="muted">Mahsulotni bir bo\'limdan boshqasiga ko\'chirish</p>']
+         '<p class="muted">Mahsulotni bir bo\'limdan boshqasiga (kerakli turga) ko\'chirish</p>']
     if msg == "ok":
         p.append('<div class="ok-msg">✅ Transfer amalga oshirildi!</div>')
     elif msg == "err":
         p.append('<div class="ok-msg" style="background:rgba(239,68,68,0.12);color:#f87171">⚠️ Xato: miqdor yetarli emas yoki mahsulot topilmadi</div>')
     p.append('<form method="post" action="/web/ombor-panel/transfer" class="add-form">')
     p.append('<label>Manba mahsulot (qayerdan)</label><select name="src_id" class="fld" required>' + src_opts + '</select>')
-    p.append('<label>Maqsad bo\'lim (qayerga)</label><select name="dst_cat" class="fld" required>' + dst_opts + '</select>')
+    p.append('<label>Maqsad bo\'lim (qayerga)</label>'
+             '<select name="dst_cat" id="dcat" class="fld" onchange="updDTur()" required>' + dst_opts + '</select>')
+    p.append('<label>Maqsad tur (masalan: yopishtirma uchun)</label><select name="dst_tur" id="dtur" class="fld"></select>')
     p.append('<label>Miqdor</label><input name="miqdor" type="number" step="any" min="0" class="fld" required>')
     p.append('<button class="save-btn">🔄 Ko\'chirish</button></form>')
+    p.append('<script>var DTUR=' + turlar_js + ';'
+             'function updDTur(){var c=document.getElementById("dcat").value;'
+             'var sel=document.getElementById("dtur");var ts=DTUR[c]||{};'
+             'sel.innerHTML="<option value=\\"\\">— tur tanlanmagan —</option>";'
+             'for(var k in ts){var o=document.createElement("option");o.value=k;o.textContent=ts[k];sel.appendChild(o);}}'
+             'updDTur();</script>')
     p.append(_ADD_CSS)
     return web.Response(text=_base_ombor("Transfer", "more", "\n".join(p), name), content_type="text/html")
 
@@ -975,6 +1157,7 @@ async def ombor_transfer_post(request: web.Request):
         raise web.HTTPFound("/web/ombor-panel/transfer?msg=err")
     if miqdor <= 0:
         raise web.HTTPFound("/web/ombor-panel/transfer?msg=err")
+    dst_tur = (data.get("dst_tur") or "").strip() or None
 
     async with AsyncSessionLocal() as db:
         src = await db.get(WarehouseProduct, src_id)
@@ -983,8 +1166,8 @@ async def ombor_transfer_post(request: web.Request):
         uid = sess.get("user_id")
         # Manbadan ayirish
         await update_product_miqdor(db, src_id, -miqdor, uid,
-                                    izoh=f"Transfer → {dst_cat.value}")
-        # Maqsadga qo'shish (mos mahsulot topib yoki yangi yaratib)
+                                    izoh=f"Transfer → {dst_cat.value}" + (f"/{dst_tur}" if dst_tur else ""))
+        # Maqsadga qo'shish (mos mahsulot topib yoki yangi yaratib) — tur ham mos kelishi kerak
         dst = (await db.execute(
             select(WarehouseProduct).where(
                 WarehouseProduct.is_active == True,
@@ -992,6 +1175,7 @@ async def ombor_transfer_post(request: web.Request):
                 WarehouseProduct.name == src.name,
                 WarehouseProduct.razmer == src.razmer,
                 WarehouseProduct.rang == src.rang,
+                WarehouseProduct.tur == dst_tur,
             ).limit(1)
         )).scalar_one_or_none()
         if dst:
@@ -1000,7 +1184,7 @@ async def ombor_transfer_post(request: web.Request):
         else:
             new_p = WarehouseProduct(
                 category=dst_cat, name=src.name, razmer=src.razmer, rang=src.rang,
-                tur=src.tur, qism=src.qism, birlik=src.birlik, miqdor=miqdor,
+                tur=dst_tur, qism=src.qism, birlik=src.birlik, miqdor=miqdor,
                 min_threshold=src.min_threshold, yellow_threshold=src.yellow_threshold,
                 qalinlik=getattr(src, "qalinlik", None), is_active=True,
             )

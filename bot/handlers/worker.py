@@ -101,8 +101,10 @@ class W(StatesGroup):
     zag_ok       = State()
 
     # 4. Gofra kiley
-    gk_sloy      = State()
-    gk_xromazes  = State()
+    gk_yonalish    = State()
+    gk_sloy        = State()
+    gk_xrom_variety = State()
+    gk_xromazes    = State()
     gk_xrom_soni = State()
     gk_zag1      = State()
     gk_zag1_soni = State()
@@ -187,7 +189,7 @@ def _parse_pos_float(text: str):
 
 async def _show_products(
     target, db, category: ProductCategory,
-    tur=None, rang=None, razmer=None,
+    tur=None, rang=None, razmer=None, name=None,
     title="Mahsulot tanlang:",
     callback_prefix="sel",
     only_positive=True,
@@ -208,6 +210,8 @@ async def _show_products(
         q = q.where(WarehouseProduct.miqdor > 0)
     if tur is not None:
         q = q.where(WarehouseProduct.tur == tur)
+    if name is not None:
+        q = q.where(WarehouseProduct.name == name)
     if rang is not None:
         q = q.where(WarehouseProduct.rang == rang)
     if yonalish is not None:
@@ -249,8 +253,8 @@ async def _show_products(
         # Qism — har doim ko'rsatish (tepa/past/yon/paddo)
         if p.qism:
             from constants import QISM_ICONS
-            icon = QISM_ICONS.get(p.qism, "")
-            label = f"{icon} {p.qism.upper()}: " + label
+            qicon = QISM_ICONS.get(p.qism, "")
+            label = f"{qicon} {p.qism.upper()}: " + label
         label += f"  ({p.miqdor:.0f} {p.birlik})"
         buttons.append([InlineKeyboardButton(
             text=label, callback_data=f"{callback_prefix}_{p.id}"
@@ -1111,6 +1115,24 @@ async def gk_start(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
         work_type=WorkType.gofra_kiley.value,
         zagatovka_ops=[],
     )
+    # Avval yo'nalish (adyol/pastel/...) — keyin faqat o'shaniki ko'rsatiladi
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🛏 Adyol", callback_data="gk_yon_adyol"),
+         InlineKeyboardButton(text="💼 Pastel", callback_data="gk_yon_pastel")],
+        [InlineKeyboardButton(text="👟 Poyabzal", callback_data="gk_yon_poyabzal"),
+         InlineKeyboardButton(text="🍰 Shirinlik", callback_data="gk_yon_shirinlik")],
+        [InlineKeyboardButton(text="🍔 Fast food", callback_data="gk_yon_fast_food"),
+         InlineKeyboardButton(text="📝 Boshqa", callback_data="gk_yon_boshqa")],
+    ])
+    await cb.message.answer("🔨 Gofra kley — qaysi yo'nalish uchun?", reply_markup=kb)
+    await state.set_state(W.gk_yonalish)
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("gk_yon_"), W.gk_yonalish)
+async def gk_yonalish(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
+    yon = cb.data.replace("gk_yon_", "", 1)   # adyol / pastel / poyabzal ...
+    await state.update_data(gk_tur=yon)
     await cb.message.answer(
         "Gofra necha qavatli (sloy)?", reply_markup=get_gofra_sloy_keyboard()
     )
@@ -1122,24 +1144,87 @@ async def gk_start(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 async def gk_sloy(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     sloy = cb.data.split("_")[1]
     await state.update_data(sloy=sloy)
-    has = await _show_products(
-        cb, db, ProductCategory.laminat_xromazes,
-        title="🔨 Gofra kley — xromazes tanlang\n(Katta/O'rta/Kichik ko'rsatiladi):",
-        callback_prefix="gk_xrom",
-        label_mode="razmer_tur",
+    await _gk_show_xrom_varieties(cb, state, db)
+    await cb.answer()
+
+
+async def _gk_show_xrom_varieties(cb, state, db):
+    """1-bosqich: xromazes XILLARINI (nom+rang) ko'rsatish — qismlarsiz."""
+    data = await state.get_data()
+    gk_tur = data.get("gk_tur")
+    prods, used_cat = [], None
+    for cat in (ProductCategory.laminat_xromazes, ProductCategory.xromazes):
+        rows = (await db.execute(
+            select(WarehouseProduct).where(
+                WarehouseProduct.category == cat,
+                WarehouseProduct.tur == gk_tur,
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.miqdor > 0,
+            ).order_by(WarehouseProduct.name)
+        )).scalars().all()
+        if rows:
+            prods, used_cat = rows, cat
+            break
+
+    if not prods:
+        await cb.message.answer("⚠️ Bu yo'nalishda xromazes yo'q, davom etiladi.")
+        await state.update_data(xromazes_product_id=None, xromazes_soni=0)
+        await _gk_show_zagatovka(cb.message, state, db)
+        return
+
+    # Nom+rang bo'yicha xillarga guruhlash
+    varieties, order = {}, []
+    for p in prods:
+        key = (p.name, p.rang or "")
+        if key not in varieties:
+            varieties[key] = []
+            order.append(key)
+        varieties[key].append(p)
+
+    vlist = [{"name": k[0], "rang": k[1]} for k in order]
+    await state.update_data(gk_xrom_varieties=vlist, gk_xrom_cat=used_cat.value)
+
+    buttons = []
+    for i, k in enumerate(order):
+        items = varieties[k]
+        has_qism = any(x.qism for x in items)
+        total = sum(float(x.miqdor or 0) for x in items)
+        label = k[0]
+        if k[1]:
+            label += f" | {k[1]}"
+        label += f"  ({len(items)} qism)" if has_qism else f"  ({total:.0f} dona)"
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"gk_xv_{i}")])
+    buttons.append([InlineKeyboardButton(text="❌ Bekor", callback_data="cancel")])
+
+    await cb.message.answer(
+        "🔨 Gofra kley — xromazes xilini tanlang:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
-    if not has:
-        has2 = await _show_products(
-            cb, db, ProductCategory.xromazes,
-            title="Xromazesni tanlang (Katta/O'rta/Kichik):",
-            callback_prefix="gk_xrom",
-            label_mode="razmer_tur",
-        )
-        if not has2:
-            await cb.message.answer("Xromazes yo'q, davom etiladi.")
-            await state.update_data(xromazes_product_id=None, xromazes_soni=0)
-            await _gk_show_zagatovka(cb.message, state, db)
-            await cb.answer(); return
+    await state.set_state(W.gk_xrom_variety)
+
+
+@router.callback_query(F.data.startswith("gk_xv_"), W.gk_xrom_variety)
+async def gk_xrom_variety(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
+    """2-bosqich: tanlangan xilning QISMLARINI ko'rsatish."""
+    idx = int(cb.data.split("_")[2])
+    data = await state.get_data()
+    vlist = data.get("gk_xrom_varieties", [])
+    if idx < 0 or idx >= len(vlist):
+        await cb.answer("Topilmadi"); return
+    v = vlist[idx]
+    try:
+        cat = ProductCategory(data.get("gk_xrom_cat"))
+    except (ValueError, TypeError):
+        cat = ProductCategory.xromazes
+    await _show_products(
+        cb, db, cat,
+        tur=data.get("gk_tur"),
+        name=v["name"],
+        rang=(v["rang"] or None),
+        title=f"📦 {v['name']} — qismni tanlang:",
+        callback_prefix="gk_xrom",
+        label_mode="razmer",
+    )
     await state.set_state(W.gk_xromazes)
     await cb.answer()
 
@@ -1180,15 +1265,17 @@ async def gk_xrom_soni(m: Message, state: FSMContext, db: AsyncSession):
 
 
 async def _gk_show_zagatovka(target, state, db):
-    """Gofra_zagatovka ni xromazes razmeri bilan filterlangan holda ko'rsatish."""
+    """Gofra_zagatovka ni yo'nalish (tur) va xromazes razmeri bilan filterlangan holda ko'rsatish."""
     data = await state.get_data()
     xrom_razmer = data.get("xromazes_razmer")  # tanlangan xromazes razmeri
+    gk_tur = data.get("gk_tur")                # tanlangan yo'nalish (adyol/pastel/...)
 
     msg = target.message if isinstance(target, CallbackQuery) else target
 
-    # Birinchi: xuddi shu razmerda gofra_zagatovka bormi?
+    # Birinchi: shu yo'nalish + xuddi shu razmerda gofra_zagatovka bormi?
     has = await _show_products(
         target, db, ProductCategory.gofra_zagatovka,
+        tur=gk_tur,
         razmer=xrom_razmer,
         title=(
             f"📐 {xrom_razmer} razmerida zagatovka tanlang:"
@@ -1196,16 +1283,17 @@ async def _gk_show_zagatovka(target, state, db):
         ),
         callback_prefix="gk_zag1",
     )
-    if not has and xrom_razmer:
-        # Aniq razmer topilmasa — barcha zagatovkalarni ko'rsatish
+    if not has:
+        # Aniq razmer topilmasa — shu yo'nalishdagi barcha zagatovkalar
         has = await _show_products(
             target, db, ProductCategory.gofra_zagatovka,
-            title="⚠️ Aynan razmer topilmadi. Barcha zagatovkalar:",
+            tur=gk_tur,
+            title="⚠️ Aynan razmer topilmadi. Shu yo'nalishdagi zagatovkalar:",
             callback_prefix="gk_zag1",
         )
     if not has:
         await msg.answer(
-            "⚠️ Zagatovka yo'q.\n"
+            "⚠️ Bu yo'nalishda zagatovka yo'q.\n"
             "Mahsulot nomini kiriting:"
         )
         await state.update_data(zagatovka_ops=[])
