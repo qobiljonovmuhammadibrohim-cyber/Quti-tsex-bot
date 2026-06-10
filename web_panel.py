@@ -6142,12 +6142,19 @@ _CAT_CFG = {
         "turlar": {
             "tiger_uchun":"✂️ Tiger kesish","gofra_kley_zagatovka":"🔨 Gofra kley — zagatovka","gofra_kley_xromazes":"🔨 Gofra kley — xromazes",
             "stepler_uchun":"📌 Stepler","salafan_uchun":"🎁 Salafan",
-            "yopish_zagatovka":"🔗 Yopish — zagatovka","yopish_xromazes":"🔗 Yopish — xromazes",
+            "yopish_uchun":"🔗 Yopish",
             "adyol_tikish_uchun":"🧵 Adyol tikish",
             "pastel_tikish_uchun":"💼 Pastel tikish","adyol_qoqish_uchun":"📫 Adyol qoqish",
             "pastel_qoqish_uchun":"📬 Pastel qoqish","xom_komple":"📦 Xom komple",
+            "gofra_uchun_rulon":"🌀 Gofra uchun rulon","list_qogoz_uchun_rulon":"📄 List qog'oz uchun rulon",
+            "zagatovka_uchun_gofra":"✂️ Zagatovka uchun gofra",
             "kapalak":"🦋 Kapalak","boshqa":"📝 Boshqa",
         },
+        "extra_cols": [("Razmer","razmer"),("Rang","rang")],
+    },
+    "tayyor_mahsulot": {
+        "title": "📦 Tayyor mahsulot",
+        "turlar": {"adyol":"🛏 Adyol","pastel":"💼 Pastel","poyabzal":"👟 Poyabzal","shirinlik":"🍰 Shirinlik","fast_food":"🍔 Fast food","boshqa":"📝 Boshqa"},
         "extra_cols": [("Razmer","razmer"),("Rang","rang")],
     },
     "qolip": {
@@ -6173,6 +6180,31 @@ _HOLAT_BADGE = {
     "tamir_talab": '<span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">🔧 Tamir talab</span>',
     "yaroqsiz":    '<span style="background:rgba(239,68,68,.15);color:#ef4444;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">❌ Yaroqsiz</span>',
 }
+
+
+def _adyol_komple(items) -> int:
+    """To'liq komple (to'plam) soni.
+    Adyol: TEPA + PAST + YON(×2) → min(tepa, past, yon//2).
+    Pastel: TEPA + PAST + PADDO → min(tepa, past, paddo).
+    """
+    bq = {}
+    for it in items:
+        if it.qism:
+            bq[it.qism] = bq.get(it.qism, 0) + float(it.miqdor or 0)
+    if not bq:
+        return 0
+    tepa = bq.get("tepa", 0)
+    past = bq.get("past", 0)
+    if "yon" in bq:
+        return int(min(tepa, past, bq.get("yon", 0) // 2))
+    if "paddo" in bq:
+        return int(min(tepa, past, bq.get("paddo", 0)))
+    return int(min(bq.values()))
+
+
+QISM_ORD_W = {"tepa": 0, "past": 1, "yon": 2, "paddo": 2}
+QISM_LBL_W = {"tepa": "TEPA", "past": "PAST", "yon": "YON", "paddo": "PADDO"}
+QISM_ICO_W = {"tepa": "⬆️", "past": "⬇️", "yon": "↔️", "paddo": "🔲"}
 
 
 
@@ -6501,50 +6533,92 @@ async def ombor_cat_detail(request: web.Request):
         extra_cols = cfg.get("extra_cols", [])
         th_extra = "".join(f"<th>{col[0]}</th>" for col in extra_cols)
 
-        rows_html = ""
-        for p in products:
-            m  = float(p.miqdor)
-            if m <= float(p.min_threshold):      st = "🔴"; sc = "cv-red"
-            elif m <= float(p.yellow_threshold): st = "🟡"; sc = "cv-yellow"
-            else:                                st = "🟢"; sc = ""
-
-            tur_lbl = cfg["turlar"].get(p.tur or "", p.tur or "—")
-
-            # Qism belgisi
-            qism_map  = {"tepa":"⬆️","past":"⬇️","yon":"↔️","paddo":"🔲"}
-            qism_badge = (
-                f'<span style="background:rgba(99,102,241,.15);color:#818cf8;'
-                f'padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700">'
-                f'{qism_map.get(p.qism,"")}{(p.qism or "").upper()}</span> '
-            ) if p.qism else ""
-            td_extra = ""
+        def _td_extra(p):
+            s = ""
             for _, attr in extra_cols:
                 if attr == "holat":
                     hval = p.holat.value if p.holat else None
-                    td_extra += f"<td>{_HOLAT_BADGE.get(hval, '<span style=\"color:var(--text2)\">—</span>')}</td>"
+                    s += f"<td>{_HOLAT_BADGE.get(hval, '<span style=\"color:var(--text2)\">—</span>')}</td>"
                 elif attr == "qalinlik":
-                    td_extra += f"<td>{p.qalinlik if p.qalinlik else '—'}</td>"
+                    s += f"<td>{p.qalinlik if p.qalinlik else '—'}</td>"
                 else:
                     val = getattr(p, attr, None) or "—"
-                    td_extra += f"<td>{h(str(val))}</td>"
+                    s += f"<td>{h(str(val))}</td>"
+            return s
 
-            rows_html += f"""
-            <tr>
-              <td>{qism_badge}<b>{h(p.name)}</b>
-                {f'<br><span style="font-size:10px;color:var(--text2)">{h(p.holat_izoh)}</span>' if p.holat_izoh else ""}
-              </td>
-              <td><span class="badge">{tur_lbl}</span></td>
-              {td_extra}
-              <td>
-                <span class="{sc}" style="font-family:monospace;font-weight:700">{st} {p.miqdor:.0f}</span>
-                <span style="color:var(--text2);font-size:11px">{p.birlik}</span>
-              </td>
-              <td>
-                <button onclick="quickKirim({p.id},'{h(p.name)}')" class="btn btn-sm btn-green">+</button>
-                <button onclick="quickChiqim({p.id},'{h(p.name)}')" class="btn btn-sm btn-red">−</button>
-                <button onclick="deleteProduct({p.id},'{h(p.name)}')" class="btn btn-sm" style="background:#7c2d12;color:#fca5a5">🗑</button>
-              </td>
-            </tr>"""
+        def _status(p):
+            m = float(p.miqdor)
+            if m <= float(p.min_threshold):      return "🔴", "cv-red"
+            elif m <= float(p.yellow_threshold): return "🟡", "cv-yellow"
+            return "🟢", ""
+
+        def _actions(p):
+            return (
+                f'<button onclick="quickKirim({p.id},\'{h(p.name)}\')" class="btn btn-sm btn-green">+</button>'
+                f'<button onclick="quickChiqim({p.id},\'{h(p.name)}\')" class="btn btn-sm btn-red">−</button>'
+                f'<button onclick="deleteProduct({p.id},\'{h(p.name)}\')" class="btn btn-sm" style="background:#7c2d12;color:#fca5a5">🗑</button>'
+            )
+
+        # Guruhlash: qismli (nom,rang,tur) → ramka; qismsiz → oddiy qator
+        groups, order = {}, []
+        for p in products:
+            key = ("V", p.name, p.rang or "", p.tur or "") if p.qism else ("S", p.id)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(p)
+
+        rows_html = ""
+        for key in order:
+            items = groups[key]
+            if key[0] == "V":
+                items.sort(key=lambda x: QISM_ORD_W.get(x.qism or "", 9))
+                first = items[0]
+                komple = _adyol_komple(items)
+                tur_lbl = cfg["turlar"].get(first.tur or "", first.tur or "—")
+                rows_html += f"""
+                <tr style="background:rgba(99,102,241,.08)">
+                  <td colspan="99" style="border-left:3px solid #6366f1">
+                    🛏 <b>{h(first.name)}</b>{(' | '+h(first.rang)) if first.rang else ''}
+                    <span class="badge">{tur_lbl}</span>
+                    <span style="background:rgba(16,185,129,.15);color:#10b981;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-left:6px">📦 Komple: {komple}</span>
+                  </td>
+                </tr>"""
+                for p in items:
+                    st, sc = _status(p)
+                    qico = QISM_ICO_W.get(p.qism, "")
+                    qlbl = QISM_LBL_W.get(p.qism, (p.qism or "").upper())
+                    rows_html += f"""
+                    <tr style="border-left:3px solid #6366f1">
+                      <td style="padding-left:18px">
+                        <span style="background:rgba(99,102,241,.15);color:#818cf8;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:700">{qico} {qlbl}</span>
+                        <span style="color:var(--text2);font-size:12px;margin-left:4px">{h(p.razmer or '')}</span>
+                      </td>
+                      <td></td>
+                      {_td_extra(p)}
+                      <td>
+                        <span class="{sc}" style="font-family:monospace;font-weight:700">{st} {p.miqdor:.0f}</span>
+                        <span style="color:var(--text2);font-size:11px">{p.birlik}</span>
+                      </td>
+                      <td>{_actions(p)}</td>
+                    </tr>"""
+            else:
+                p = items[0]
+                st, sc = _status(p)
+                tur_lbl = cfg["turlar"].get(p.tur or "", p.tur or "—")
+                rows_html += f"""
+                <tr>
+                  <td><b>{h(p.name)}</b>
+                    {f'<br><span style="font-size:10px;color:var(--text2)">{h(p.holat_izoh)}</span>' if p.holat_izoh else ""}
+                  </td>
+                  <td><span class="badge">{tur_lbl}</span></td>
+                  {_td_extra(p)}
+                  <td>
+                    <span class="{sc}" style="font-family:monospace;font-weight:700">{st} {p.miqdor:.0f}</span>
+                    <span style="color:var(--text2);font-size:11px">{p.birlik}</span>
+                  </td>
+                  <td>{_actions(p)}</td>
+                </tr>"""
 
         if not products:
             rows_html = '<tr><td colspan="99" style="text-align:center;color:var(--text2);padding:24px">📭 Mahsulot topilmadi</td></tr>'

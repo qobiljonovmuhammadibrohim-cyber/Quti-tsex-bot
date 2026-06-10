@@ -63,7 +63,7 @@ async def _chiqim(
 async def _kirim(
     db, category, name, miqdor, user_id, izoh,
     razmer=None, rang=None, tur=None, qalinlik=None,
-    birlik="dona", yonalish=None, work_entry_id=None,
+    birlik="dona", yonalish=None, qism=None, work_entry_id=None,
 ) -> None:
     """Omborga kirim. Mavjud bo'lsa yangilaydi, yo'q bo'lsa yaratadi."""
     razmer = _normalize_razmer(razmer)  # normallashtirish
@@ -75,6 +75,7 @@ async def _kirim(
     if razmer is not None: q = q.where(WarehouseProduct.razmer == razmer)
     if rang is not None:   q = q.where(WarehouseProduct.rang == rang)
     if tur is not None:    q = q.where(WarehouseProduct.tur == tur)
+    if qism is not None:   q = q.where(WarehouseProduct.qism == qism)
 
     r       = await db.execute(q.limit(1))
     product = r.scalar_one_or_none()
@@ -90,6 +91,7 @@ async def _kirim(
             razmer=razmer,
             rang=rang,
             tur=tur,
+            qism=qism,
             miqdor=float(miqdor),
             birlik=birlik,
             yonalish=yonalish,
@@ -302,18 +304,22 @@ async def laminatsiya_ops(bot, db, data, user_id, work_entry_id):
 
 
 async def zagatovka_ops(bot, db, data, user_id, work_entry_id):
+    """Zagatovka: gofra (zagatovka_uchun_gofra) ni kesib, gofra_kley_zagatovka
+    turiga xromazes nomi/razmeri/qismi bilan chiqaradi (gofra kley uchun juftlash oson)."""
     warns    = []
     soni     = _safe_int(data.get("soni", 0))
+    # Nom/razmer/qism/rang — tanlangan gofra_kley_xromazes dan (faqat nom uchun)
     nomi     = _str_or_none(data.get("mahsulot_nomi")) or "Zagatovka"
     razmer   = _str_or_none(data.get("razmer"))
-    tur      = _str_or_none(data.get("tur")) or ""
-    gofra_top = _safe_int(data.get("gofra_top_soni", 0)) or soni
-    gofra_id  = data.get("gofra_product_id")
+    qism     = _str_or_none(data.get("qism"))
+    rang     = _str_or_none(data.get("rang"))
+    gofra_id = data.get("gofra_product_id")
 
+    # 1) Iste'mol: zagatovka_uchun_gofra dan gofra ayiriladi
     if gofra_id:
         w = await _chiqim(
-            db, gofra_id, gofra_top, user_id,
-            f"Zagatovka kesish: {nomi} {razmer or ''} ({tur}), {gofra_top} top go'fra",
+            db, gofra_id, soni, user_id,
+            f"Zagatovka kesish: {nomi} {razmer or ''} {qism or ''} ({soni} dona)",
             work_entry_id,
         )
         if w:
@@ -321,21 +327,18 @@ async def zagatovka_ops(bot, db, data, user_id, work_entry_id):
     else:
         warns.append("Go'fra tanlanmadi — ombor ayirilmadi")
 
-    # TUZATILDI: zagatovka → ProductCategory.gofra_zagatovka
-    # Nom va razmer xromazesdan olinadi (worker.py da saqlanadi)
-    zag_nomi = nomi  # xromazes nomi (masalan: "Istanbul adyol tepa 60x40")
-    if not nomi or nomi == "Zagatovka":
-        zag_nomi = f"Zagatovka {razmer or ''} ({tur})"
-
+    # 2) Natija: gofra_kley_zagatovka turiga, xromazes nomi bilan
     await _kirim(
         db,
-        category=ProductCategory.gofra_zagatovka,
-        name=zag_nomi,
+        category=ProductCategory.yarim_tayyor,
+        name=nomi,
         miqdor=soni,
         user_id=user_id,
-        izoh=f"Zagatovka kesildi → Gofra kley uchun: {razmer or '?'}, {tur}",
+        izoh=f"Zagatovka kesildi (gofra kley uchun): {razmer or '?'} {qism or ''}",
         razmer=razmer,
-        tur=tur,   # Yirik yoki Mayin — qaysi gofradan kesilganligini ko'rsatadi
+        rang=rang,
+        qism=qism,
+        tur="gofra_kley_zagatovka",
         work_entry_id=work_entry_id,
     )
     return warns

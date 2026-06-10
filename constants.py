@@ -294,17 +294,17 @@ WORK_MATERIAL_SOURCE = {
     "gofra_kiley":     {"cat": "yarim_tayyor", "tur": ["gofra_kley_zagatovka", "gofra_kley_xromazes"]},
     "stepler_tikish":  {"cat": "yarim_tayyor", "tur": "stepler_uchun"},
     "rulonga_salafan": {"cat": "yarim_tayyor", "tur": "salafan_uchun"},
-    "yopishtirma":     {"cat": "yarim_tayyor", "tur": ["yopish_zagatovka", "yopish_xromazes"]},
+    "yopishtirma":     {"cat": "yarim_tayyor", "tur": "yopish_uchun"},
     "adyol_tikish":    {"cat": "yarim_tayyor", "tur": "adyol_tikish_uchun"},
     "diplomat_tikish": {"cat": "yarim_tayyor", "tur": "pastel_tikish_uchun"},
     "adyol_qoqish":    {"cat": "yarim_tayyor", "tur": "adyol_qoqish_uchun"},
     "pastel_qoqish":   {"cat": "yarim_tayyor", "tur": "pastel_qoqish_uchun"},
     # Xom bosqichlar (butun kategoriya)
-    "gofra_ishlab":    {"cat": "rulon", "tur": None},
-    "list_qogoz":      {"cat": "rulon", "tur": None},
+    "gofra_ishlab":    {"cat": "yarim_tayyor", "tur": "gofra_uchun_rulon"},
+    "list_qogoz":      {"cat": "yarim_tayyor", "tur": "list_qogoz_uchun_rulon"},
     "rulon_orash":     {"cat": "rulon", "tur": None},
     "laminatsiya":     {"cat": "xromazes", "tur": None},
-    "zagatovka":       {"cat": "laminat_xromazes", "tur": None},
+    "zagatovka":       {"cat": "yarim_tayyor", "tur": "zagatovka_uchun_gofra"},
     "rulon_ishlab":    None,   # material yo'q — yangi rulon yaratadi
 }
 

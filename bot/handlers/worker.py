@@ -92,6 +92,8 @@ class W(StatesGroup):
     lam_ok       = State()
 
     # 3. Zagatovka kesish
+    zag_xvar     = State()  # xromazes xili (nom+rang)
+    zag_xpart    = State()  # xromazes qismi (nom uchun)
     zag_gofra    = State()
     zag_top_soni = State()
     zag_nomi     = State()
@@ -106,6 +108,7 @@ class W(StatesGroup):
     gk_xrom_variety = State()
     gk_xromazes    = State()
     gk_xrom_soni = State()
+    gk_zag_variety = State()
     gk_zag1      = State()
     gk_zag1_soni = State()
     gk_zag2      = State()
@@ -682,8 +685,8 @@ async def gi_tur(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     tur = "Yirik" if cb.data == "gofra_yirik" else "Mayin"
     await state.update_data(tur=tur)
     has = await _show_products(
-        cb, db, ProductCategory.rulon,
-        title="Birinchi rulonni tanlang:", callback_prefix="gi_rul",
+        cb, db, ProductCategory.yarim_tayyor, tur="gofra_uchun_rulon",
+        title="Birinchi rulonni tanlang (yarim tayyor):", callback_prefix="gi_rul",
     )
     if not has:
         await state.clear()
@@ -740,8 +743,8 @@ async def gi_rul_miqdor(m: Message, state: FSMContext, db: AsyncSession):
 @router.callback_query(F.data == "gi_more", W.gi_rulonlar)
 async def gi_more(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     has = await _show_products(
-        cb, db, ProductCategory.rulon,
-        title="Yana rulon tanlang:", callback_prefix="gi_rul",
+        cb, db, ProductCategory.yarim_tayyor, tur="gofra_uchun_rulon",
+        title="Yana rulon tanlang (yarim tayyor):", callback_prefix="gi_rul",
     )
     if not has:
         await cb.message.answer("Boshqa rulon yo'q.")
@@ -937,145 +940,148 @@ async def lam_ok(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 
 @router.callback_query(F.data == "work_zagatovka")
 async def zag_start(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    """
-    Zagatovka: xromazes (yo'nalish) + gofra (material) → gofra_zagatovka
-    1. Xromazeslar ro'yxati (laminat + oddiy) ko'rsatiladi
-    2. Xromazes tanlanadi → nom, razmer, rang AVTOMATIK olinadi
-    3. Gofralar (yirik/mayin) ko'rsatiladi
-    4. Soni kiritiladi
-    """
+    """Zagatovka: gofrani kesib, gofra_kley_zagatovka ga xromazes nomi bilan chiqaradi.
+    1) Qaysi xromazesga mos (gofra_kley_xromazes, nom uchun) → 2) gofra (zagatovka_uchun_gofra, iste'mol)
+    → 3) nechta → natija gofra_kley_zagatovka ga (xromazes nomi/razmeri/qismi bilan)."""
     await state.update_data(work_type=WorkType.zagatovka.value)
+    await _zag_show_xrom_varieties(cb, state, db)
+    await cb.answer()
 
-    # Avval laminat_xromazes, keyin xromazes ko'rsatish
-    has = await _show_products(
-        cb, db, ProductCategory.laminat_xromazes,
-        title="📐 Zagatovka uchun xromazes tanlang:",
-        callback_prefix="zag_xrom",
-        extra_cats=[ProductCategory.xromazes],
-        label_mode="razmer",
-        yonalish="zagatovka",   # Faqat zagatovka yo'nalishlilar
-    )
-    if not has:
-        await state.update_data(xromazes_product_id=None, mahsulot_nomi="", razmer="")
+
+async def _zag_show_xrom_varieties(cb, state, db):
+    """1-bosqich: gofra_kley_xromazes XILLARINI ko'rsatish (moslash uchun)."""
+    rows = (await db.execute(
+        select(WarehouseProduct).where(
+            WarehouseProduct.category == ProductCategory.yarim_tayyor,
+            WarehouseProduct.tur == "gofra_kley_xromazes",
+            WarehouseProduct.is_active == True,
+            WarehouseProduct.miqdor > 0,
+        ).order_by(WarehouseProduct.name)
+    )).scalars().all()
+    if not rows:
         await cb.message.answer(
-            "⚠️ Omborda xromazes yo'q.\n"
-            "Karobka nomini kiriting:"
+            "⚠️ Yarim tayyorda 'gofra kley uchun xromazes' yo'q.\n"
+            "Zagatovkani moslash uchun avval xromazes bo'lishi kerak.\n"
+            "Mahsulot nomini qo'lda kiriting:"
         )
+        await state.update_data(qism=None, rang=None)
         await state.set_state(W.zag_nomi)
-    else:
-        await state.set_state(W.zag_gofra)
+        return
+    varieties, order = {}, []
+    for p in rows:
+        key = (p.name, p.rang or "")
+        if key not in varieties:
+            varieties[key] = []
+            order.append(key)
+        varieties[key].append(p)
+    vlist = [{"name": k[0], "rang": k[1]} for k in order]
+    await state.update_data(zag_xrom_varieties=vlist)
+    buttons = []
+    for i, k in enumerate(order):
+        items = varieties[k]
+        label = k[0] + (f" | {k[1]}" if k[1] else "") + f"  ({len(items)} qism)"
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"zag_xv_{i}")])
+    buttons.append([InlineKeyboardButton(text="✍️ Qo'lda nom kiritish", callback_data="zag_manual")])
+    buttons.append([InlineKeyboardButton(text="❌ Bekor", callback_data="cancel")])
+    await cb.message.answer(
+        "✂️ Zagatovka — qaysi xromazesga mos? (nom uchun):",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+    await state.set_state(W.zag_xvar)
+
+
+@router.callback_query(F.data == "zag_manual", W.zag_xvar)
+async def zag_manual(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
+    await state.update_data(qism=None, rang=None)
+    await cb.message.answer("Mahsulot nomini kiriting:")
+    await state.set_state(W.zag_nomi)
     await cb.answer()
 
 
-@router.callback_query(F.data.startswith("zag_xrom_"), W.zag_gofra)
-async def zag_xrom_sel(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    """Xromazes tanlanganda ma'lumotlarni saqlab, gofralarni ko'rsatish."""
+@router.callback_query(F.data.startswith("zag_xv_"), W.zag_xvar)
+async def zag_xvar(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
+    """Tanlangan xilning qismlarini ko'rsatish (nom/razmer/qism uchun)."""
+    idx = int(cb.data.split("_")[2])
+    data = await state.get_data()
+    vlist = data.get("zag_xrom_varieties", [])
+    if idx < 0 or idx >= len(vlist):
+        await cb.answer("Topilmadi"); return
+    v = vlist[idx]
+    await _show_products(
+        cb, db, ProductCategory.yarim_tayyor,
+        tur="gofra_kley_xromazes",
+        name=v["name"],
+        rang=(v["rang"] or None),
+        title=f"📦 {v['name']} — qaysi qismga mos?",
+        callback_prefix="zag_xp",
+        label_mode="razmer",
+    )
+    await state.set_state(W.zag_xpart)
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("zag_xp_"), W.zag_xpart)
+async def zag_xpart(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
+    """Xromazes qismi tanlandi — nom/razmer/qism/rang saqlanadi (iste'mol YO'Q)."""
     pid = int(cb.data.split("_")[2])
-    p   = await db.get(WarehouseProduct, pid)
+    p = await db.get(WarehouseProduct, pid)
     if not p:
-        await cb.answer("Mahsulot topilmadi"); return
-
+        await cb.answer("Topilmadi"); return
     await state.update_data(
-        xromazes_product_id=pid,
-        mahsulot_nomi=p.name,
-        razmer=p.razmer or "",
-        rang=p.rang or "",
-        xromazes_razmer=p.razmer,
+        mahsulot_nomi=p.name, razmer=p.razmer or "",
+        qism=p.qism, rang=p.rang or "",
     )
+    qlbl = (p.qism or "").upper()
     await cb.message.answer(
-        f"📦 <b>{p.name}</b>\n"
-        f"📐 {p.razmer or '—'}  🎨 {p.rang or '—'}\n\n"
-        f"Qaysi gofradan kesamiz?",
+        f"✅ Moslandi: <b>{p.name}</b> {qlbl} ({p.razmer or '—'})\n\n"
+        f"Endi qaysi gofradan kesasiz?",
         parse_mode="HTML",
-        reply_markup=get_gofra_type_keyboard(),
     )
-    # zag_gofra state da "gofra_yirik/mayin" callback ni qabul qilamiz
-    await state.set_state(W.zag_tur)
+    await _zag_show_gofra(cb, state, db)
     await cb.answer()
 
 
-@router.callback_query(F.data.startswith("zag_gof_"), W.zag_gofra)
-async def zag_gof(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    """Fallback — eski flow (xromazes yo'q bo'lsa)."""
-    pid = int(cb.data.split("_")[2])
-    p   = await db.get(WarehouseProduct, pid)
-    await state.update_data(gofra_product_id=pid)
-    await cb.message.answer(
-        f"📦 {p.name if p else '?'}\n"
-        f"Qoldiq: {p.miqdor if p else '?'}\n\n"
-        f"Nechta top gofra oldingiz?"
-    )
-    await state.set_state(W.zag_top_soni)
-    await cb.answer()
-
-
-@router.callback_query(F.data.startswith("gofra_"), W.zag_tur)
-async def zag_tur(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    """Gofra turi tanlangach — mavjud gofralarni ko'rsatish."""
-    tur = "Yirik" if cb.data == "gofra_yirik" else "Mayin"
-    await state.update_data(tur=tur)
-
-    # Ombordan shu turdagi gofralarni ko'rsatish
+async def _zag_show_gofra(cb, state, db):
+    """2-bosqich: zagatovka_uchun_gofra ni ko'rsatish (iste'mol uchun)."""
     has = await _show_products(
-        cb, db, ProductCategory.gofra,
-        tur=tur,
-        title=f"{'🔵 Yirik' if tur == 'Yirik' else '🟢 Mayin'} gofradan qaysinisi?",
+        cb, db, ProductCategory.yarim_tayyor,
+        tur="zagatovka_uchun_gofra",
+        title="✂️ Qaysi gofradan kesasiz? (yarim tayyor):",
         callback_prefix="zag_gof2",
     )
     if not has:
-        # Gofra kategoriyasida topilmasa, gofra_zagatovka dan ham qidirish
-        has2 = await _show_products(
-            cb, db, ProductCategory.gofra_zagatovka,
-            tur=tur,
-            title=f"Zagatovka gofra ({tur}):",
-            callback_prefix="zag_gof2",
-        )
-        if not has2:
-            await state.update_data(gofra_product_id=None, gofra_top_soni=0)
-            await cb.message.answer("⚠️ Omborda gofra yo'q. Nechta zagatovka kesdingiz?")
-            await state.set_state(W.zag_soni)
-            await cb.answer(); return
-
+        await cb.message.answer("⚠️ Yarim tayyorda 'zagatovka uchun gofra' yo'q.")
+        await state.update_data(gofra_product_id=None)
     await state.set_state(W.zag_top_soni)
-    await cb.answer()
+
+
+@router.message(W.zag_nomi)
+async def zag_nomi(m: Message, state: FSMContext, db: AsyncSession):
+    """Qo'lda nom kiritilganda."""
+    await state.update_data(mahsulot_nomi=m.text.strip())
+    has = await _show_products(
+        m, db, ProductCategory.yarim_tayyor,
+        tur="zagatovka_uchun_gofra",
+        title="✂️ Qaysi gofradan kesasiz? (yarim tayyor):",
+        callback_prefix="zag_gof2",
+    )
+    if not has:
+        await m.answer("⚠️ Yarim tayyorda 'zagatovka uchun gofra' yo'q.")
+        await state.update_data(gofra_product_id=None)
+    await state.set_state(W.zag_top_soni)
 
 
 @router.callback_query(F.data.startswith("zag_gof2_"), W.zag_top_soni)
 async def zag_gof2_sel(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     pid = int(cb.data.split("_")[2])
     p   = await db.get(WarehouseProduct, pid)
-    if not p: await cb.answer("Topilmadi"); return
+    if not p:
+        await cb.answer("Topilmadi"); return
     await state.update_data(gofra_product_id=pid)
     await cb.message.answer(
         f"📦 {p.name}\nQoldiq: {p.miqdor:.0f} {p.birlik}\n\n"
-        f"Nechta top gofra oldingiz?"
+        f"Nechta zagatovka kesdingiz?"
     )
-    await cb.answer()
-
-
-@router.message(W.zag_top_soni)
-async def zag_top_soni(m: Message, state: FSMContext):
-    miq = _parse_pos_int(m.text)
-    if miq is None:
-        await m.answer("Musbat son kiriting:"); return
-    await state.update_data(gofra_top_soni=miq)
-    await m.answer("Nechta zagatovka kesdingiz?")
-    await state.set_state(W.zag_soni)
-
-
-@router.message(W.zag_nomi)
-async def zag_nomi(m: Message, state: FSMContext):
-    """Fallback: xromazes yo'q bo'lsa nom qo'lda kiritiladi."""
-    await state.update_data(mahsulot_nomi=m.text.strip())
-    await m.answer("Gofra turi:", reply_markup=get_gofra_type_keyboard())
-    await state.set_state(W.zag_tur)
-
-
-@router.callback_query(F.data.startswith("zag_size_"), W.zag_razmer)
-async def zag_razmer(cb: CallbackQuery, state: FSMContext):
-    razmer = cb.data[9:]
-    await state.update_data(razmer=_size_label(razmer))
-    await cb.message.answer("Nechta zagatovka kesdingiz?")
     await state.set_state(W.zag_soni)
     await cb.answer()
 
@@ -1087,14 +1093,15 @@ async def zag_soni(m: Message, state: FSMContext, db: AsyncSession):
         await m.answer("Musbat son kiriting:"); return
     data   = await state.get_data()
     razmer = data.get("razmer", "")
+    qism   = data.get("qism") or ""
     narx   = await get_price(db, WorkType.zagatovka, razmer if razmer else None)
     await _confirm_screen(
         m, state, WorkType.zagatovka.value, "Zagatovka Kesish",
         [
             f"Mahsulot: {data.get('mahsulot_nomi', '')}",
-            f"Tur: {data.get('tur', '')}",
+            f"Qism: {qism.upper()}" if qism else "Qism: —",
             f"Razmer: {razmer}",
-            f"Gofra: {data.get('gofra_top_soni', '?')} top",
+            f"Natija → gofra kley uchun zagatovka",
         ],
         soni, narx, soni * narx, W.zag_ok,
     )
@@ -1102,6 +1109,8 @@ async def zag_soni(m: Message, state: FSMContext, db: AsyncSession):
 
 @router.callback_query(F.data == "confirm_yes", W.zag_ok)
 async def zag_ok(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
+    await _save_work_and_ops(cb, state, db)
+
     await _save_work_and_ops(cb, state, db)
 
 
@@ -1115,24 +1124,6 @@ async def gk_start(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
         work_type=WorkType.gofra_kiley.value,
         zagatovka_ops=[],
     )
-    # Avval yo'nalish (adyol/pastel/...) — keyin faqat o'shaniki ko'rsatiladi
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🛏 Adyol", callback_data="gk_yon_adyol"),
-         InlineKeyboardButton(text="💼 Pastel", callback_data="gk_yon_pastel")],
-        [InlineKeyboardButton(text="👟 Poyabzal", callback_data="gk_yon_poyabzal"),
-         InlineKeyboardButton(text="🍰 Shirinlik", callback_data="gk_yon_shirinlik")],
-        [InlineKeyboardButton(text="🍔 Fast food", callback_data="gk_yon_fast_food"),
-         InlineKeyboardButton(text="📝 Boshqa", callback_data="gk_yon_boshqa")],
-    ])
-    await cb.message.answer("🔨 Gofra kley — qaysi yo'nalish uchun?", reply_markup=kb)
-    await state.set_state(W.gk_yonalish)
-    await cb.answer()
-
-
-@router.callback_query(F.data.startswith("gk_yon_"), W.gk_yonalish)
-async def gk_yonalish(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
-    yon = cb.data.replace("gk_yon_", "", 1)   # adyol / pastel / poyabzal ...
-    await state.update_data(gk_tur=yon)
     await cb.message.answer(
         "Gofra necha qavatli (sloy)?", reply_markup=get_gofra_sloy_keyboard()
     )
@@ -1149,32 +1140,27 @@ async def gk_sloy(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 
 
 async def _gk_show_xrom_varieties(cb, state, db):
-    """1-bosqich: xromazes XILLARINI (nom+rang) ko'rsatish — qismlarsiz."""
-    data = await state.get_data()
-    gk_tur = data.get("gk_tur")
-    prods, used_cat = [], None
-    for cat in (ProductCategory.laminat_xromazes, ProductCategory.xromazes):
-        rows = (await db.execute(
-            select(WarehouseProduct).where(
-                WarehouseProduct.category == cat,
-                WarehouseProduct.tur == gk_tur,
-                WarehouseProduct.is_active == True,
-                WarehouseProduct.miqdor > 0,
-            ).order_by(WarehouseProduct.name)
-        )).scalars().all()
-        if rows:
-            prods, used_cat = rows, cat
-            break
+    """1-bosqich: yarim tayyor / gofra_kley_xromazes turidan XILLARNI ko'rsatish."""
+    rows = (await db.execute(
+        select(WarehouseProduct).where(
+            WarehouseProduct.category == ProductCategory.yarim_tayyor,
+            WarehouseProduct.tur == "gofra_kley_xromazes",
+            WarehouseProduct.is_active == True,
+            WarehouseProduct.miqdor > 0,
+        ).order_by(WarehouseProduct.name)
+    )).scalars().all()
 
-    if not prods:
-        await cb.message.answer("⚠️ Bu yo'nalishda xromazes yo'q, davom etiladi.")
+    if not rows:
+        await cb.message.answer(
+            "⚠️ Yarim tayyorda 'gofra kley uchun xromazes' yo'q.\n"
+            "Avval omborchi xromazes o'tkazishi yoki ishchi tayyorlashi kerak. Davom etiladi."
+        )
         await state.update_data(xromazes_product_id=None, xromazes_soni=0)
         await _gk_show_zagatovka(cb.message, state, db)
         return
 
-    # Nom+rang bo'yicha xillarga guruhlash
     varieties, order = {}, []
-    for p in prods:
+    for p in rows:
         key = (p.name, p.rang or "")
         if key not in varieties:
             varieties[key] = []
@@ -1182,7 +1168,7 @@ async def _gk_show_xrom_varieties(cb, state, db):
         varieties[key].append(p)
 
     vlist = [{"name": k[0], "rang": k[1]} for k in order]
-    await state.update_data(gk_xrom_varieties=vlist, gk_xrom_cat=used_cat.value)
+    await state.update_data(gk_xrom_varieties=vlist, gk_xrom_cat="yarim_tayyor")
 
     buttons = []
     for i, k in enumerate(order):
@@ -1197,7 +1183,7 @@ async def _gk_show_xrom_varieties(cb, state, db):
     buttons.append([InlineKeyboardButton(text="❌ Bekor", callback_data="cancel")])
 
     await cb.message.answer(
-        "🔨 Gofra kley — xromazes xilini tanlang:",
+        "🔨 Gofra kley — xromazes xilini tanlang (yarim tayyor):",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
     await state.set_state(W.gk_xrom_variety)
@@ -1212,13 +1198,9 @@ async def gk_xrom_variety(cb: CallbackQuery, state: FSMContext, db: AsyncSession
     if idx < 0 or idx >= len(vlist):
         await cb.answer("Topilmadi"); return
     v = vlist[idx]
-    try:
-        cat = ProductCategory(data.get("gk_xrom_cat"))
-    except (ValueError, TypeError):
-        cat = ProductCategory.xromazes
     await _show_products(
-        cb, db, cat,
-        tur=data.get("gk_tur"),
+        cb, db, ProductCategory.yarim_tayyor,
+        tur="gofra_kley_xromazes",
         name=v["name"],
         rang=(v["rang"] or None),
         title=f"📦 {v['name']} — qismni tanlang:",
@@ -1265,41 +1247,77 @@ async def gk_xrom_soni(m: Message, state: FSMContext, db: AsyncSession):
 
 
 async def _gk_show_zagatovka(target, state, db):
-    """Gofra_zagatovka ni yo'nalish (tur) va xromazes razmeri bilan filterlangan holda ko'rsatish."""
-    data = await state.get_data()
-    xrom_razmer = data.get("xromazes_razmer")  # tanlangan xromazes razmeri
-    gk_tur = data.get("gk_tur")                # tanlangan yo'nalish (adyol/pastel/...)
-
+    """Yarim tayyor / gofra_kley_zagatovka turidan XILLARNI ko'rsatish (xil→qism)."""
     msg = target.message if isinstance(target, CallbackQuery) else target
 
-    # Birinchi: shu yo'nalish + xuddi shu razmerda gofra_zagatovka bormi?
-    has = await _show_products(
-        target, db, ProductCategory.gofra_zagatovka,
-        tur=gk_tur,
-        razmer=xrom_razmer,
-        title=(
-            f"📐 {xrom_razmer} razmerida zagatovka tanlang:"
-            if xrom_razmer else "Zagatovkani tanlang:"
-        ),
-        callback_prefix="gk_zag1",
-    )
-    if not has:
-        # Aniq razmer topilmasa — shu yo'nalishdagi barcha zagatovkalar
-        has = await _show_products(
-            target, db, ProductCategory.gofra_zagatovka,
-            tur=gk_tur,
-            title="⚠️ Aynan razmer topilmadi. Shu yo'nalishdagi zagatovkalar:",
-            callback_prefix="gk_zag1",
-        )
-    if not has:
+    rows = (await db.execute(
+        select(WarehouseProduct).where(
+            WarehouseProduct.category == ProductCategory.yarim_tayyor,
+            WarehouseProduct.tur == "gofra_kley_zagatovka",
+            WarehouseProduct.is_active == True,
+            WarehouseProduct.miqdor > 0,
+        ).order_by(WarehouseProduct.name)
+    )).scalars().all()
+
+    if not rows:
         await msg.answer(
-            "⚠️ Bu yo'nalishda zagatovka yo'q.\n"
+            "⚠️ Yarim tayyorda 'gofra kley uchun zagatovka' yo'q.\n"
             "Mahsulot nomini kiriting:"
         )
         await state.update_data(zagatovka_ops=[])
         await state.set_state(W.gk_nomi)
-    else:
-        await state.set_state(W.gk_zag1)
+        return
+
+    varieties, order = {}, []
+    for p in rows:
+        key = (p.name, p.rang or "")
+        if key not in varieties:
+            varieties[key] = []
+            order.append(key)
+        varieties[key].append(p)
+
+    vlist = [{"name": k[0], "rang": k[1]} for k in order]
+    await state.update_data(gk_zag_varieties=vlist)
+
+    buttons = []
+    for i, k in enumerate(order):
+        items = varieties[k]
+        has_qism = any(x.qism for x in items)
+        total = sum(float(x.miqdor or 0) for x in items)
+        label = k[0]
+        if k[1]:
+            label += f" | {k[1]}"
+        label += f"  ({len(items)} qism)" if has_qism else f"  ({total:.0f} dona)"
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"gk_zv_{i}")])
+    buttons.append([InlineKeyboardButton(text="❌ Bekor", callback_data="cancel")])
+
+    await msg.answer(
+        "🔨 Gofra kley — zagatovka xilini tanlang (yarim tayyor):",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+    await state.set_state(W.gk_zag_variety)
+
+
+@router.callback_query(F.data.startswith("gk_zv_"), W.gk_zag_variety)
+async def gk_zag_variety(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
+    """Tanlangan zagatovka xilining QISMLARINI ko'rsatish."""
+    idx = int(cb.data.split("_")[2])
+    data = await state.get_data()
+    vlist = data.get("gk_zag_varieties", [])
+    if idx < 0 or idx >= len(vlist):
+        await cb.answer("Topilmadi"); return
+    v = vlist[idx]
+    await _show_products(
+        cb, db, ProductCategory.yarim_tayyor,
+        tur="gofra_kley_zagatovka",
+        name=v["name"],
+        rang=(v["rang"] or None),
+        title=f"📦 {v['name']} — zagatovka qismini tanlang:",
+        callback_prefix="gk_zag1",
+        label_mode="razmer",
+    )
+    await state.set_state(W.gk_zag1)
+    await cb.answer()
 
 
 @router.callback_query(F.data.startswith("gk_zag1_"), W.gk_zag1)
@@ -1325,8 +1343,9 @@ async def gk_zag1_soni(m: Message, state: FSMContext, db: AsyncSession):
     await state.update_data(zagatovka_ops=zag_ops)
     if str(data.get("sloy", "3")) == "5":
         has = await _show_products(
-            m, db, ProductCategory.gofra_zagatovka,  # TUZATILDI
-            title="2-chi zagatovkani tanlang (5-sloy):", callback_prefix="gk_zag2",
+            m, db, ProductCategory.yarim_tayyor,
+            tur="gofra_kley_zagatovka",
+            title="2-chi zagatovkani tanlang (5-sloy, yarim tayyor):", callback_prefix="gk_zag2",
         )
         if has:
             await state.set_state(W.gk_zag2); return
@@ -1549,8 +1568,8 @@ async def tiger_ok(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
 async def list_start(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     await state.update_data(work_type=WorkType.list_qogoz.value)
     has = await _show_products(
-        cb, db, ProductCategory.rulon,
-        title="Qaysi rulondan foydalandingiz?", callback_prefix="lst_rul",
+        cb, db, ProductCategory.yarim_tayyor, tur="list_qogoz_uchun_rulon",
+        title="Qaysi rulondan foydalandingiz? (yarim tayyor)", callback_prefix="lst_rul",
     )
     if not has:
         await state.update_data(rulon_product_id=None)

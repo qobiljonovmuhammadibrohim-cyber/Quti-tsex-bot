@@ -14,7 +14,7 @@ from database.models import WarehouseProduct, WarehouseLog, ProductCategory
 from database.queries import update_product_miqdor
 
 # Umumiy yordamchilar (web_panel.py dan)
-from web_panel import _current, _require_role, h, _CAT_CFG
+from web_panel import _current, _require_role, h, _CAT_CFG, _adyol_komple
 
 
 # ─── Kategoriya nomlari ──────────────────────────────────────────────────
@@ -30,6 +30,43 @@ CAT_LABELS = {
     "adyol_zapchast": "🧵 Adyol zapchast",
     "uskuna_zapchast": "🔧 Uskuna zapchast",
 }
+
+_QISM_ORD = {"tepa": 0, "past": 1, "yon": 2, "paddo": 2}
+_QISM_LBL = {"tepa": "TEPA", "past": "PAST", "yon": "YON", "paddo": "PADDO"}
+
+
+def _group_qism(products):
+    """Mahsulotlarni guruhlash: qismlilar (nom,rang,tur) → ramka, qismsizlar — yakka.
+    Tartibni saqlaydi. Qaytaradi: [('V', [items]) yoki ('S', [item]), ...]"""
+    groups, order = {}, []
+    for pr in products:
+        key = ("V", pr.name, pr.rang or "", pr.tur or "") if pr.qism else ("S", pr.id)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(pr)
+    out = []
+    for key in order:
+        items = groups[key]
+        if key[0] == "V":
+            items.sort(key=lambda x: _QISM_ORD.get(x.qism or "", 9))
+            out.append(("V", items))
+        else:
+            out.append(("S", items))
+    return out
+
+
+def _frame_head_html(items):
+    """Ramka sarlavhasi: nom + tur + rang + komple."""
+    first = items[0]
+    cat_key = first.category.value if first.category else ""
+    turlar = _CAT_CFG.get(cat_key, {}).get("turlar", {})
+    tur_label = turlar.get(first.tur, first.tur or "")
+    komple = _adyol_komple(items)
+    head_parts = list(filter(None, [tur_label, first.rang]))
+    return ('<div class="frame-head">' + h(first.name)
+            + (' <span class="frame-sub">' + h(" · ".join(head_parts)) + '</span>' if head_parts else '')
+            + ' <span class="komple-badge">📦 Komple: ' + str(komple) + '</span></div>')
 
 
 # ─── Asosiy shablon (mustaqil) ───────────────────────────────────────────
@@ -248,24 +285,48 @@ async def ombor_operatsiya(request: web.Request):
     if not products:
         p.append('<p class="empty">Mahsulot topilmadi</p>')
     else:
-        for pr in products:
-            extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
+        def _op_part_row(pr, in_frame=False):
             miq = float(pr.miqdor or 0)
             low = miq <= float(pr.min_threshold or 0)
             color = "#f87171" if low else ("#34d399" if miq > 0 else "#94a3b8")
             pid = str(pr.id)
-            p.append('<div class="op-card" id="prod-' + pid + '">')
-            p.append('<div class="op-top"><div><div class="op-name">' + h(pr.name) + '</div>')
-            if extra:
-                p.append('<div class="op-extra">' + h(extra) + '</div>')
-            p.append('</div><div class="op-qty" style="color:' + color + '">'
-                     + ("%.0f" % miq) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
-            p.append('<div class="op-ctrl">'
-                     '<input type="number" id="amt-' + pid + '" placeholder="Miqdor" class="op-amt" step="any" min="0">'
-                     '<button class="op-b op-in-btn" onclick="doOp(' + pid + ',1)">+ Kirim</button>'
-                     '<button class="op-b op-out-btn" onclick="doOp(' + pid + ',-1)">− Chiqim</button>'
-                     '</div></div>')
+            s = []
+            if in_frame:
+                qlbl = _QISM_LBL.get(pr.qism or "", (pr.qism or "").upper())
+                rz = (' ' + h(pr.razmer)) if pr.razmer else ''
+                s.append('<div class="frame-row" id="prod-' + pid + '">')
+                s.append('<div class="qism-tag">' + qlbl + ('<span class="frame-rz">' + h(pr.razmer) + '</span>' if pr.razmer else '') + '</div>')
+                s.append('<div class="frame-qty" style="color:' + color + '">' + ("%.0f" % miq) + ' <span>' + h(pr.birlik or "dona") + '</span></div>')
+                s.append('<input type="number" id="amt-' + pid + '" placeholder="0" class="frame-amt" step="any" min="0">')
+                s.append('<button class="fb fb-in" onclick="doOp(' + pid + ',1)">+</button>')
+                s.append('<button class="fb fb-out" onclick="doOp(' + pid + ',-1)">−</button>')
+                s.append('</div>')
+            else:
+                extra = " · ".join(filter(None, [pr.razmer, pr.rang]))
+                s.append('<div class="op-card" id="prod-' + pid + '">')
+                s.append('<div class="op-top"><div><div class="op-name">' + h(pr.name) + '</div>')
+                if extra:
+                    s.append('<div class="op-extra">' + h(extra) + '</div>')
+                s.append('</div><div class="op-qty" style="color:' + color + '">'
+                         + ("%.0f" % miq) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
+                s.append('<div class="op-ctrl">'
+                         '<input type="number" id="amt-' + pid + '" placeholder="Miqdor" class="op-amt" step="any" min="0">'
+                         '<button class="op-b op-in-btn" onclick="doOp(' + pid + ',1)">+ Kirim</button>'
+                         '<button class="op-b op-out-btn" onclick="doOp(' + pid + ',-1)">− Chiqim</button>'
+                         '</div></div>')
+            return "\n".join(s)
 
+        for kind, items in _group_qism(products):
+            if kind == "V":
+                p.append('<div class="frame">')
+                p.append(_frame_head_html(items))
+                for pr in items:
+                    p.append(_op_part_row(pr, in_frame=True))
+                p.append('</div>')
+            else:
+                p.append(_op_part_row(items[0], in_frame=False))
+
+    p.append(_FRAME_CSS)
     p.append(_OPS_JS)
     return web.Response(text=_base_ombor("Kirim/Chiqim", "ops", "\n".join(p), name), content_type="text/html")
 
@@ -322,6 +383,7 @@ async def ombor_bolim(request: web.Request):
         return web.HTTPFound("/web/ombor-panel/bolimlar")
 
     turlar = cfg.get("turlar", {})
+    show_kochir = ck != "yarim_tayyor"  # asosiy ombordan yarim tayyorga ko'chirish
 
     async with AsyncSessionLocal() as db:
         stmt = select(WarehouseProduct).where(
@@ -380,10 +442,12 @@ async def ombor_bolim(request: web.Request):
                 items.sort(key=lambda x: QISM_ORD.get(x.qism or "", 9))
                 first = items[0]
                 tur_label = turlar.get(first.tur, first.tur or "")
+                komple = _adyol_komple(items)
                 head_parts = list(filter(None, [tur_label, first.rang]))
                 p.append('<div class="frame">')
                 p.append('<div class="frame-head">' + h(first.name)
                          + (' <span class="frame-sub">' + h(" · ".join(head_parts)) + '</span>' if head_parts else '')
+                         + ' <span class="komple-badge">📦 Komple: ' + str(komple) + '</span>'
                          + '</div>')
                 for pr in items:
                     miq = float(pr.miqdor or 0)
@@ -399,6 +463,8 @@ async def ombor_bolim(request: web.Request):
                     p.append('<input type="number" id="amt-' + pid + '" placeholder="0" class="frame-amt" step="any" min="0">')
                     p.append('<button class="fb fb-in" onclick="doOp(' + pid + ',1)">+</button>')
                     p.append('<button class="fb fb-out" onclick="doOp(' + pid + ',-1)">−</button>')
+                    if show_kochir:
+                        p.append('<button class="fb fb-mv" onclick="openMove(' + pid + ",'" + h(pr.name).replace("'", "") + "'" + ')" title="Yarim tayyorga ko\'chirish">→</button>')
                     p.append('<a href="/web/ombor-panel/tahrir/' + pid + '" class="frame-edit">✏️</a>')
                     p.append('</div>')
                 p.append('</div>')
@@ -424,7 +490,30 @@ async def ombor_bolim(request: web.Request):
                          '<input type="number" id="amt-' + pid + '" placeholder="Miqdor" class="op-amt" step="any" min="0">'
                          '<button class="op-b op-in-btn" onclick="doOp(' + pid + ',1)">+ Kirim</button>'
                          '<button class="op-b op-out-btn" onclick="doOp(' + pid + ',-1)">− Chiqim</button>'
-                         '</div></div>')
+                         + ('<button class="op-b op-mv-btn" onclick="openMove(' + pid + ",'" + h(pr.name).replace("'", "") + "'" + ')">→ Ko\'chir</button>' if show_kochir else '')
+                         + '</div></div>')
+    # Yarim tayyorga ko'chirish modali
+    if show_kochir:
+        yt_turlar = _CAT_CFG.get("yarim_tayyor", {}).get("turlar", {})
+        opts = "".join('<option value="' + h(k) + '">' + h(v) + '</option>' for k, v in yt_turlar.items())
+        p.append(
+            '<div id="mv-overlay" class="mv-overlay" onclick="closeMove(event)">'
+            '<div class="mv-box" onclick="event.stopPropagation()">'
+            '<div class="mv-title">→ Yarim tayyorga ko\'chirish</div>'
+            '<div class="mv-name" id="mv-name"></div>'
+            '<label class="mv-lbl">Qaysi turga?</label>'
+            '<select id="mv-tur" class="mv-fld">' + opts + '</select>'
+            '<label class="mv-lbl">Miqdor</label>'
+            '<input type="number" id="mv-miqdor" class="mv-fld" step="any" min="0" placeholder="0">'
+            '<div id="mv-err" class="mv-err"></div>'
+            '<div class="mv-actions">'
+            '<button class="mv-cancel" onclick="closeMove()">Bekor</button>'
+            '<button class="mv-ok" id="mv-ok" onclick="doMove()">Ko\'chirish</button>'
+            '</div></div></div>'
+        )
+        p.append(_MOVE_CSS)
+        p.append(_MOVE_JS)
+
     p.append(_FRAME_CSS)
     p.append(_OPS_JS)
     p.append(_SEC_CSS)
@@ -469,6 +558,7 @@ _FRAME_CSS = """
 .frame { background:var(--bg2); border:2px solid var(--accent); border-radius:14px; padding:12px; margin-bottom:12px }
 .frame-head { font-weight:700; font-size:15px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--border) }
 .frame-sub { font-size:12px; color:var(--muted); font-weight:400 }
+.komple-badge { font-size:11px; font-weight:700; color:#34d399; background:rgba(16,185,129,0.15); border-radius:10px; padding:2px 8px; margin-left:4px }
 .frame-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05) }
 .frame-row:last-child { border-bottom:none }
 .qism-tag { min-width:54px; font-size:12px; font-weight:800; color:#a5b4fc; background:rgba(99,102,241,0.15); border-radius:6px; padding:4px 6px; text-align:center }
@@ -519,6 +609,53 @@ _OPS_JS = (
     'setTimeout(function(){btn.textContent=old;qty.style.color="";},1200);'
     '}else{alert("Xato: "+(d.error||"?"));}'
     '}).catch(function(e){alert("Tarmoq xatosi: "+e);});}'
+    '</script>'
+)
+
+_MOVE_CSS = """
+<style>
+.fb-mv { background:#0e7490; color:#fff }
+.op-mv-btn { background:#0e7490; color:#fff }
+.mv-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:200; align-items:center; justify-content:center; padding:16px }
+.mv-overlay.show { display:flex }
+.mv-box { background:var(--bg2); border:1px solid var(--border); border-radius:18px; padding:20px; width:100%; max-width:360px }
+.mv-title { font-size:16px; font-weight:800; color:#22d3ee; margin-bottom:4px }
+.mv-name { font-size:14px; color:var(--fg); margin-bottom:14px; font-weight:600 }
+.mv-lbl { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px }
+.mv-fld { width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--fg); font-size:15px }
+.mv-err { color:#f87171; font-size:12px; min-height:16px; margin-top:6px }
+.mv-actions { display:flex; gap:10px; margin-top:14px }
+.mv-cancel { flex:1; padding:12px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--muted); font-weight:700 }
+.mv-ok { flex:2; padding:12px; border-radius:10px; border:none; background:#0e7490; color:#fff; font-weight:800 }
+</style>
+"""
+
+_MOVE_JS = (
+    '<script>'
+    'var mvPid=null;'
+    'function openMove(pid,name){mvPid=pid;'
+    'document.getElementById("mv-name").textContent=name;'
+    'document.getElementById("mv-miqdor").value="";'
+    'document.getElementById("mv-err").textContent="";'
+    'document.getElementById("mv-overlay").classList.add("show");}'
+    'function closeMove(e){if(e&&e.target!==document.getElementById("mv-overlay")&&e.type!=="click")return;'
+    'document.getElementById("mv-overlay").classList.remove("show");}'
+    'function doMove(){'
+    'var tur=document.getElementById("mv-tur").value;'
+    'var miq=parseFloat(document.getElementById("mv-miqdor").value);'
+    'var err=document.getElementById("mv-err");'
+    'if(!miq||miq<=0){err.textContent="Miqdor kiriting";return;}'
+    'var btn=document.getElementById("mv-ok");btn.disabled=true;btn.textContent="...";'
+    'fetch("/web/ombor-panel/quick-transfer",{method:"POST",headers:{"Content-Type":"application/json"},'
+    'body:JSON.stringify({product_id:mvPid,dst_tur:tur,miqdor:miq})})'
+    '.then(function(r){return r.json();}).then(function(d){'
+    'btn.disabled=false;btn.textContent="Ko\\u2019chirish";'
+    'if(d.ok){var item=document.getElementById("prod-"+mvPid);'
+    'if(item){var q=item.querySelector(".frame-qty")||item.querySelector(".op-qty");'
+    'if(q){q.innerHTML=Math.round(d.new_miqdor)+" <span>dona</span>";q.style.color="#22d3ee";}}'
+    'document.getElementById("mv-overlay").classList.remove("show");'
+    '}else{err.textContent=d.error||"Xato";}'
+    '}).catch(function(e){btn.disabled=false;btn.textContent="Ko\\u2019chirish";err.textContent="Tarmoq xatosi";});}'
     '</script>'
 )
 
@@ -661,15 +798,9 @@ async def ombor_qoshish(request: web.Request):
     p.append('<form method="post" action="/web/ombor-panel/qoshish" class="add-form">')
     p.append('<label>Bo\'lim (kategoriya) *</label>'
              '<select name="category" id="cat" class="fld" onchange="updTur()" required>' + cat_options + '</select>')
-    p.append('<label>Tur</label><select name="tur" id="tur" class="fld"></select>')
-
-    # Mahsulot ko'rinishi: Oddiy / Adyol (3 qism) / Pastel (3 qism)
-    p.append('<label>Mahsulot ko\'rinishi</label>'
-             '<select name="kind" id="kind" class="fld" onchange="updKind()">'
-             '<option value="oddiy">Oddiy (bitta mahsulot)</option>'
-             '<option value="adyol">Adyol — 3 qism (TEPA, PAST, YON)</option>'
-             '<option value="pastel">Pastel — 3 qism (TEPA, PAST, PADDO)</option>'
-             '</select>')
+    p.append('<label>Tur</label><select name="tur" id="tur" class="fld" onchange="updKind()"></select>')
+    p.append('<input type="hidden" name="kind" id="kind" value="oddiy">')
+    p.append('<div id="kind-info" class="kind-info" style="display:none"></div>')
 
     p.append('<label>Nomi *</label><input name="name" class="fld" placeholder="Masalan: Istanbul adyol Katta" required>')
     p.append('<div class="frow">'
@@ -705,17 +836,34 @@ async def ombor_qoshish(request: web.Request):
              '<div><label>Ogoh chegarasi (sariq)</label><input name="yellow_threshold" type="number" step="any" class="fld" value="20"></div></div>')
     p.append('<button class="save-btn">💾 Qo\'shish</button></form>')
 
+    # Adyol/pastel turini turdan AVTOMATIK aniqlash mumkin bo'lgan bo'limlar
+    multi_cats = ["yarim_tayyor", "xromazes", "laminat_xromazes", "gofra_zagatovka"]
+    multi_cats_js = _json.dumps(multi_cats)
+
     p.append('<script>var TURLAR=' + turlar_js + ';'
+             'var MULTICATS=' + multi_cats_js + ';'
              'function updTur(){var c=document.getElementById("cat").value;'
              'var sel=document.getElementById("tur");var ts=TURLAR[c]||{};'
              'sel.innerHTML="<option value=\\"\\">— tur tanlanmagan —</option>";'
-             'for(var k in ts){var o=document.createElement("option");o.value=k;o.textContent=ts[k];sel.appendChild(o);}}'
-             'function updKind(){var k=document.getElementById("kind").value;'
+             'for(var k in ts){var o=document.createElement("option");o.value=k;o.textContent=ts[k];sel.appendChild(o);}'
+             'updKind();}'
+             # Turga qarab avtomatik: adyol/pastel bo'lsa 3 qism formasi chiqadi
+             'function updKind(){'
+             'var c=document.getElementById("cat").value;'
+             'var t=document.getElementById("tur").value||"";'
+             'var kind="oddiy";'
+             'if(MULTICATS.indexOf(c)>=0){'
+             'if(t.indexOf("adyol")===0)kind="adyol";'
+             'else if(t.indexOf("pastel")===0)kind="pastel";}'
+             'document.getElementById("kind").value=kind;'
              'var qbox=document.getElementById("qism-box");var mbox=document.getElementById("miqdor-box");'
-             'if(k==="oddiy"){qbox.style.display="none";mbox.style.display="block";}'
+             'var info=document.getElementById("kind-info");'
+             'if(kind==="oddiy"){qbox.style.display="none";mbox.style.display="block";info.style.display="none";}'
              'else{qbox.style.display="block";mbox.style.display="none";'
-             'document.getElementById("q3-lbl").textContent=(k==="pastel")?"PADDO":"YON";}}'
-             'updTur();updKind();</script>')
+             'info.style.display="block";'
+             'info.textContent=(kind==="pastel")?"💼 Pastel — 3 qism (TEPA, PAST, PADDO)":"🛏 Adyol — 3 qism (TEPA, PAST, YON)";'
+             'document.getElementById("q3-lbl").textContent=(kind==="pastel")?"PADDO":"YON";}}'
+             'updTur();</script>')
     p.append(_ADD_CSS)
     return web.Response(text=_base_ombor("Qo'shish", "add", "\n".join(p), name), content_type="text/html")
 
@@ -737,7 +885,19 @@ async def ombor_qoshish_post(request: web.Request):
         except (ValueError, TypeError):
             return default
 
+    # Kind ni turdan server tomonida aniqlash (ishonchli, JS ishlamasa ham)
+    tur_v = (data.get("tur") or "").strip()
+    multi_cats = {"yarim_tayyor", "xromazes", "laminat_xromazes", "gofra_zagatovka"}
     kind = (data.get("kind") or "oddiy").strip()
+    if cat.value in multi_cats:
+        if tur_v.startswith("adyol"):
+            kind = "adyol"
+        elif tur_v.startswith("pastel"):
+            kind = "pastel"
+        else:
+            kind = "oddiy"
+    else:
+        kind = "oddiy"
     def _gram():
         try:
             g = (data.get("gramaj") or "").strip()
@@ -904,6 +1064,7 @@ _ADD_CSS = """
 .frow3 > div { flex:1 }
 .qism-box, #qism-box { background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.3); border-radius:12px; padding:12px; margin-top:6px }
 .qism-title { font-size:13px; font-weight:700; color:#a5b4fc; margin-bottom:8px }
+.kind-info { background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.35); color:#a5b4fc; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:13px; font-weight:600 }
 .qrow { display:flex; gap:6px; align-items:center; margin-bottom:6px }
 .qlbl { min-width:50px; font-size:12px; font-weight:800; color:#a5b4fc; background:rgba(99,102,241,0.15); border-radius:6px; padding:8px 4px; text-align:center }
 .qfld { flex:1 }
@@ -1053,19 +1214,42 @@ async def ombor_inventar(request: web.Request):
     if not products:
         p.append('<p class="empty">Mahsulot topilmadi</p>')
     else:
-        for pr in products:
-            extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
+        def _inv_part(pr, in_frame=False):
             pid = str(pr.id)
             miq = float(pr.miqdor or 0)
-            p.append('<div class="op-card" id="inv-' + pid + '">')
-            p.append('<div class="op-top"><div><div class="op-name">' + h(pr.name) + '</div>')
-            if extra:
-                p.append('<div class="op-extra">' + h(extra) + '</div>')
-            p.append('</div><div class="op-qty">Bot: <b id="invbot-' + pid + '">' + ("%.0f" % miq) + '</b> <span>' + h(pr.birlik or "dona") + '</span></div></div>')
-            p.append('<div class="op-ctrl">'
-                     '<input type="number" id="invact-' + pid + '" placeholder="Haqiqiy son" class="op-amt" step="any" min="0">'
-                     '<button class="op-b op-in-btn" onclick="doInv(' + pid + ')">✓ Saqlash</button>'
-                     '</div><div class="inv-diff" id="invdiff-' + pid + '"></div></div>')
+            s = []
+            if in_frame:
+                qlbl = _QISM_LBL.get(pr.qism or "", (pr.qism or "").upper())
+                s.append('<div class="frame-row" id="inv-' + pid + '" style="flex-wrap:wrap">')
+                s.append('<div class="qism-tag">' + qlbl + ('<span class="frame-rz">' + h(pr.razmer) + '</span>' if pr.razmer else '') + '</div>')
+                s.append('<div class="frame-qty">Bot: <b id="invbot-' + pid + '">' + ("%.0f" % miq) + '</b></div>')
+                s.append('<input type="number" id="invact-' + pid + '" placeholder="Haqiqiy" class="frame-amt" step="any" min="0">')
+                s.append('<button class="fb fb-in" onclick="doInv(' + pid + ')">✓</button>')
+                s.append('<div class="inv-diff" id="invdiff-' + pid + '" style="width:100%"></div>')
+                s.append('</div>')
+            else:
+                extra = " · ".join(filter(None, [pr.razmer, pr.rang]))
+                s.append('<div class="op-card" id="inv-' + pid + '">')
+                s.append('<div class="op-top"><div><div class="op-name">' + h(pr.name) + '</div>')
+                if extra:
+                    s.append('<div class="op-extra">' + h(extra) + '</div>')
+                s.append('</div><div class="op-qty">Bot: <b id="invbot-' + pid + '">' + ("%.0f" % miq) + '</b> <span>' + h(pr.birlik or "dona") + '</span></div></div>')
+                s.append('<div class="op-ctrl">'
+                         '<input type="number" id="invact-' + pid + '" placeholder="Haqiqiy son" class="op-amt" step="any" min="0">'
+                         '<button class="op-b op-in-btn" onclick="doInv(' + pid + ')">✓ Saqlash</button>'
+                         '</div><div class="inv-diff" id="invdiff-' + pid + '"></div></div>')
+            return "\n".join(s)
+
+        for kind, items in _group_qism(products):
+            if kind == "V":
+                p.append('<div class="frame">')
+                p.append(_frame_head_html(items))
+                for pr in items:
+                    p.append(_inv_part(pr, in_frame=True))
+                p.append('</div>')
+            else:
+                p.append(_inv_part(items[0], in_frame=False))
+    p.append(_FRAME_CSS)
     p.append(_INV_JS)
     return web.Response(text=_base_ombor("Inventarizatsiya", "more", "\n".join(p), name), content_type="text/html")
 
@@ -1113,11 +1297,25 @@ async def ombor_transfer(request: web.Request):
             ).order_by(WarehouseProduct.name.asc())
         )).scalars().all()
 
+    # Manba dropdown — adyol/pastel qismlari optgroup ichida (xil bo'yicha)
     src_opts = ""
-    for pr in products:
-        extra = (" (" + h(pr.razmer) + ")") if pr.razmer else ""
-        src_opts += ('<option value="' + str(pr.id) + '">' + h(pr.name) + extra +
-                     ' — ' + ("%.0f" % float(pr.miqdor or 0)) + ' ' + h(pr.birlik or "dona") + '</option>')
+    for kind, items in _group_qism(products):
+        if kind == "V":
+            first = items[0]
+            komple = _adyol_komple(items)
+            grp = h(first.name) + ((" | " + h(first.rang)) if first.rang else "") + (" — komple " + str(komple))
+            src_opts += '<optgroup label="🛏 ' + grp + '">'
+            for pr in items:
+                qlbl = _QISM_LBL.get(pr.qism or "", (pr.qism or "").upper())
+                rz = (" " + h(pr.razmer)) if pr.razmer else ""
+                src_opts += ('<option value="' + str(pr.id) + '">' + qlbl + rz +
+                             ' — ' + ("%.0f" % float(pr.miqdor or 0)) + ' ' + h(pr.birlik or "dona") + '</option>')
+            src_opts += '</optgroup>'
+        else:
+            pr = items[0]
+            extra = (" (" + h(pr.razmer) + ")") if pr.razmer else ""
+            src_opts += ('<option value="' + str(pr.id) + '">' + h(pr.name) + extra +
+                         ' — ' + ("%.0f" % float(pr.miqdor or 0)) + ' ' + h(pr.birlik or "dona") + '</option>')
     dst_opts = "".join('<option value="' + ck + '">' + cfg.get("title", ck) + '</option>' for ck, cfg in _CAT_CFG.items())
     import json as _json
     turlar_js = _json.dumps({ck: cfg.get("turlar", {}) for ck, cfg in _CAT_CFG.items()}, ensure_ascii=False)
@@ -1197,6 +1395,64 @@ async def ombor_transfer_post(request: web.Request):
     raise web.HTTPFound("/web/ombor-panel/transfer?msg=ok")
 
 
+@_require_role("omborchi")
+async def ombor_quick_transfer(request: web.Request):
+    """Har qator yonidagi '→ Ko'chir' tugmasi — AJAX. Asosiy ombordan
+    yarim tayyorga ko'chiradi (manbadan kamayadi, yarim tayyorga qo'shiladi)."""
+    sess = _current(request)
+    uid = sess.get("user_id")
+    try:
+        body = await request.json()
+        pid = int(body.get("product_id"))
+        dst_tur = (body.get("dst_tur") or "").strip()
+        miqdor = float(body.get("miqdor") or 0)
+    except (ValueError, TypeError, Exception):
+        return web.json_response({"ok": False, "error": "Noto'g'ri ma'lumot"}, status=400)
+    if miqdor <= 0:
+        return web.json_response({"ok": False, "error": "Miqdor 0 dan katta bo'lsin"})
+    if not dst_tur:
+        return web.json_response({"ok": False, "error": "Tur tanlanmadi"})
+
+    async with AsyncSessionLocal() as db:
+        src = await db.get(WarehouseProduct, pid)
+        if not src:
+            return web.json_response({"ok": False, "error": "Mahsulot topilmadi"})
+        if float(src.miqdor or 0) < miqdor:
+            return web.json_response({"ok": False, "error": f"Yetarli emas (mavjud: {float(src.miqdor or 0):.0f})"})
+
+        await update_product_miqdor(db, pid, -miqdor, uid,
+                                    izoh=f"Ko'chirildi → yarim_tayyor/{dst_tur}")
+        dst = (await db.execute(
+            select(WarehouseProduct).where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.category == ProductCategory.yarim_tayyor,
+                WarehouseProduct.name == src.name,
+                WarehouseProduct.razmer == src.razmer,
+                WarehouseProduct.rang == src.rang,
+                WarehouseProduct.qism == src.qism,
+                WarehouseProduct.tur == dst_tur,
+            ).limit(1)
+        )).scalar_one_or_none()
+        if dst:
+            await update_product_miqdor(db, dst.id, miqdor, uid,
+                                        izoh=f"Ko'chirildi ← {src.category.value if src.category else '?'}")
+        else:
+            new_p = WarehouseProduct(
+                category=ProductCategory.yarim_tayyor, name=src.name, razmer=src.razmer,
+                rang=src.rang, tur=dst_tur, qism=src.qism, birlik=src.birlik, miqdor=miqdor,
+                min_threshold=src.min_threshold, yellow_threshold=src.yellow_threshold,
+                qalinlik=getattr(src, "qalinlik", None), is_active=True,
+            )
+            db.add(new_p)
+            await db.flush()
+            db.add(WarehouseLog(product_id=new_p.id, user_id=uid, amal="kirim",
+                                miqdor=miqdor, oldin=0.0, keyin=miqdor,
+                                izoh=f"Ko'chirildi ← {src.category.value if src.category else '?'}"))
+        await db.commit()
+        src2 = await db.get(WarehouseProduct, pid)
+        return web.json_response({"ok": True, "new_miqdor": float(src2.miqdor or 0)})
+
+
 # ─── 11. BUYURTMA RO'YXATI (kam qolgan mahsulotlar) ──────────────────────
 @_require_role("omborchi")
 async def ombor_buyurtma(request: web.Request):
@@ -1220,26 +1476,42 @@ async def ombor_buyurtma(request: web.Request):
                  'border-radius:16px;padding:24px;text-align:center;color:#34d399;font-weight:700">'
                  '✅ Ombor holati yaxshi! Hamma mahsulot yetarli.</div>')
     else:
+        def _buy_section(plist, title, color, badge_bg):
+            p.append('<div class="card"><div class="card-head"><h2 style="color:' + color + '">' + title + '</h2>'
+                     '<span class="badge" style="background:' + badge_bg + '">' + str(len(plist)) + '</span></div>')
+            for kind, items in _group_qism(plist):
+                if kind == "V":
+                    first = items[0]
+                    cat_lbl = CAT_LABELS.get(first.category.value if first.category else "", "")
+                    hp = " · ".join(filter(None, [cat_lbl, first.rang,
+                          _CAT_CFG.get(first.category.value if first.category else "", {}).get("turlar", {}).get(first.tur, first.tur or "")]))
+                    p.append('<div class="frame" style="border-color:' + color + '">')
+                    p.append('<div class="frame-head">🛏 ' + h(first.name)
+                             + (' <span class="frame-sub">' + h(hp) + '</span>' if hp else '') + '</div>')
+                    for pr in items:
+                        qlbl = _QISM_LBL.get(pr.qism or "", (pr.qism or "").upper())
+                        rz = (' ' + h(pr.razmer)) if pr.razmer else ''
+                        p.append('<div class="frame-row">'
+                                 '<div class="qism-tag">' + qlbl + (('<span class="frame-rz">' + h(pr.razmer) + '</span>') if pr.razmer else '') + '</div>'
+                                 '<div class="frame-qty" style="color:' + color + '">' + ("%.0f" % float(pr.miqdor or 0))
+                                 + ' <span>' + h(pr.birlik or "dona") + '</span></div>'
+                                 '<div style="font-size:11px;color:var(--muted);margin-left:auto">min: ' + ("%.0f" % float(pr.min_threshold or 0)) + '</div>'
+                                 '</div>')
+                    p.append('</div>')
+                else:
+                    pr = items[0]
+                    extra = " · ".join(filter(None, [pr.razmer, pr.rang]))
+                    sub = (CAT_LABELS.get(pr.category.value if pr.category else "", "") + (" · " + h(extra) if extra else ""))
+                    p.append('<div class="row"><div style="flex:1"><div class="row-name">' + h(pr.name) + '</div>'
+                             '<div class="row-sub">' + sub + ' · min: ' + ("%.0f" % float(pr.min_threshold or 0)) + '</div></div>'
+                             '<div class="row-qty" style="color:' + color + '">' + ("%.0f" % float(pr.miqdor or 0)) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
+            p.append('</div>')
+
         if kritik:
-            p.append('<div class="card"><div class="card-head"><h2 style="color:#f87171">🔴 Tugay deyapti</h2>'
-                     '<span class="badge" style="background:#ef4444">' + str(len(kritik)) + '</span></div>')
-            for pr in kritik:
-                extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
-                sub = (CAT_LABELS.get(pr.category.value if pr.category else "", "") + (" · " + h(extra) if extra else ""))
-                p.append('<div class="row"><div style="flex:1"><div class="row-name">' + h(pr.name) + '</div>'
-                         '<div class="row-sub">' + sub + ' · min: ' + ("%.0f" % float(pr.min_threshold or 0)) + '</div></div>'
-                         '<div class="row-qty" style="color:#f87171">' + ("%.0f" % float(pr.miqdor or 0)) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
-            p.append('</div>')
+            _buy_section(kritik, "🔴 Tugay deyapti", "#f87171", "#ef4444")
         if ogoh:
-            p.append('<div class="card"><div class="card-head"><h2 style="color:#fbbf24">🟡 Ogohlantirish</h2>'
-                     '<span class="badge">' + str(len(ogoh)) + '</span></div>')
-            for pr in ogoh:
-                extra = " · ".join(filter(None, [pr.razmer, pr.rang, pr.qism]))
-                sub = (CAT_LABELS.get(pr.category.value if pr.category else "", "") + (" · " + h(extra) if extra else ""))
-                p.append('<div class="row"><div style="flex:1"><div class="row-name">' + h(pr.name) + '</div>'
-                         '<div class="row-sub">' + sub + '</div></div>'
-                         '<div class="row-qty warn">' + ("%.0f" % float(pr.miqdor or 0)) + ' <span>' + h(pr.birlik or "dona") + '</span></div></div>')
-            p.append('</div>')
+            _buy_section(ogoh, "🟡 Ogohlantirish", "#fbbf24", "#6366f1")
+    p.append(_FRAME_CSS)
     return web.Response(text=_base_ombor("Buyurtma", "more", "\n".join(p), name), content_type="text/html")
 
 
@@ -1282,4 +1554,5 @@ def register_ombor_routes(app: web.Application):
     app.router.add_post("/web/ombor-panel/inventar", ombor_inventar_post)
     app.router.add_get("/web/ombor-panel/transfer", ombor_transfer)
     app.router.add_post("/web/ombor-panel/transfer", ombor_transfer_post)
+    app.router.add_post("/web/ombor-panel/quick-transfer", ombor_quick_transfer)
     app.router.add_get("/web/ombor-panel/buyurtma", ombor_buyurtma)
