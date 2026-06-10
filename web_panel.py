@@ -6354,6 +6354,52 @@ def _add_form_fields(cat_key: str, cfg: dict, tur_filter: str = "") -> str:
       <input type="number" name="yellow_threshold" value="5" min="0"></div>
     </div>"""
 
+    # Adyol/pastel — turdan avtomatik 3 qismli forma (omborchi panel bilan bir xil)
+    if cat_key in ("yarim_tayyor", "xromazes", "laminat_xromazes", "gofra_zagatovka"):
+        fields += """
+    <input type="hidden" name="kind" id="adm-kind" value="oddiy">
+    <div id="adm-kind-info" style="display:none;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);color:#a5b4fc;border-radius:10px;padding:9px 11px;margin:8px 0;font-size:12px;font-weight:600"></div>
+    <div id="adm-qism-box" style="display:none">
+      <div style="font-size:12px;font-weight:700;color:#a5b4fc;margin-bottom:6px">Har qism — razmer va soni:</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <span style="min-width:48px;font-size:11px;font-weight:800;color:#a5b4fc">TEPA</span>
+        <input name="razmer_tepa" placeholder="razmer" style="flex:1">
+        <input name="qism_tepa" type="number" step="any" placeholder="soni" value="0" style="flex:1"></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <span style="min-width:48px;font-size:11px;font-weight:800;color:#a5b4fc">PAST</span>
+        <input name="razmer_past" placeholder="razmer" style="flex:1">
+        <input name="qism_past" type="number" step="any" placeholder="soni" value="0" style="flex:1"></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <span style="min-width:48px;font-size:11px;font-weight:800;color:#a5b4fc" id="adm-q3-lbl">YON</span>
+        <input name="razmer_3" placeholder="razmer" style="flex:1">
+        <input name="qism_3" type="number" step="any" placeholder="soni" value="0" style="flex:1"></div>
+    </div>
+    <script>
+    (function(){
+      var form=document.currentScript.closest('form')||document;
+      var turSel=form.querySelector('[name=tur]');
+      var box=document.getElementById('adm-qism-box');
+      var info=document.getElementById('adm-kind-info');
+      var kindInp=document.getElementById('adm-kind');
+      function upd(){
+        var t=(turSel&&turSel.value)||'';
+        var kind='oddiy';
+        if(t.indexOf('adyol')===0)kind='adyol';
+        else if(t.indexOf('pastel')===0)kind='pastel';
+        kindInp.value=kind;
+        var miq=form.querySelector('[name=miqdor]');
+        var qsel=form.querySelector('select[name=qism]');
+        if(kind==='oddiy'){box.style.display='none';info.style.display='none';
+          if(miq)miq.closest('.fg').style.display='';if(qsel)qsel.closest('.fg').style.display='';}
+        else{box.style.display='';info.style.display='';
+          info.textContent=(kind==='pastel')?'💼 Pastel — 3 qism (TEPA, PAST, PADDO)':'🛏 Adyol — 3 qism (TEPA, PAST, YON)';
+          document.getElementById('adm-q3-lbl').textContent=(kind==='pastel')?'PADDO':'YON';
+          if(miq)miq.closest('.fg').style.display='none';if(qsel)qsel.closest('.fg').style.display='none';}
+      }
+      if(turSel){turSel.addEventListener('change',upd);upd();}
+    })();
+    </script>"""
+
     return fields
 
 
@@ -6552,10 +6598,14 @@ async def ombor_cat_detail(request: web.Request):
             elif m <= float(p.yellow_threshold): return "🟡", "cv-yellow"
             return "🟢", ""
 
+        show_kochir = cat_key != "yarim_tayyor"
         def _actions(p):
+            mv = (f'<button onclick="admMove({p.id},\'{h(p.name)}\')" class="btn btn-sm" style="background:#0e7490;color:#fff" title="Yarim tayyorga ko\'chirish">→</button>'
+                  if show_kochir else "")
             return (
                 f'<button onclick="quickKirim({p.id},\'{h(p.name)}\')" class="btn btn-sm btn-green">+</button>'
                 f'<button onclick="quickChiqim({p.id},\'{h(p.name)}\')" class="btn btn-sm btn-red">−</button>'
+                + mv +
                 f'<button onclick="deleteProduct({p.id},\'{h(p.name)}\')" class="btn btn-sm" style="background:#7c2d12;color:#fca5a5">🗑</button>'
             )
 
@@ -6636,6 +6686,10 @@ async def ombor_cat_detail(request: web.Request):
                 pg_html += f'<a href="{base_url}?page={i}{t_p}{h_p}{q_p}" class="btn btn-sm btn-outline"{act}>{i+1}</a>'
             pg_html += "</div>"
 
+        # Yarim tayyor turlari — ko'chirish modali uchun
+        _yt_turlar = _CAT_CFG.get("yarim_tayyor", {}).get("turlar", {})
+        yt_opts = "".join(f'<option value="{h(k)}">{h(v)}</option>' for k, v in _yt_turlar.items())
+
         content = f"""
 <div class="card-hd mb12">
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -6700,6 +6754,22 @@ async def ombor_cat_detail(request: web.Request):
   {pg_html}
 </div>
 
+<div id="adm-mv-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--card,#1a1a2e);border:1px solid var(--border,#333);border-radius:16px;padding:20px;width:100%;max-width:380px" onclick="event.stopPropagation()">
+    <div style="font-size:16px;font-weight:800;color:#22d3ee;margin-bottom:4px">→ Yarim tayyorga ko'chirish</div>
+    <div id="adm-mv-name" style="font-size:14px;margin-bottom:14px;font-weight:600"></div>
+    <label class="fl">Qaysi turga?</label>
+    <select id="adm-mv-tur" class="fsel" style="width:100%;margin-bottom:10px">{yt_opts}</select>
+    <label class="fl">Miqdor</label>
+    <input id="adm-mv-miqdor" type="number" step="any" min="0" placeholder="0" style="width:100%">
+    <div id="adm-mv-err" style="color:#f87171;font-size:12px;min-height:16px;margin-top:6px"></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button onclick="document.getElementById('adm-mv-overlay').style.display='none'" class="btn btn-outline" style="flex:1">Bekor</button>
+      <button id="adm-mv-ok" onclick="doAdmMove()" class="btn" style="flex:2;background:#0e7490;color:#fff">Ko'chirish</button>
+    </div>
+  </div>
+</div>
+
 <script>
 
 function deleteProduct(id, nom) {{
@@ -6735,6 +6805,29 @@ function quickChiqim(id, nom) {{
     else alert("❌ Xato: " + (d.error||""))
   }})
 }}
+var admMvId=null;
+function admMove(id, nom) {{
+  admMvId=id;
+  document.getElementById('adm-mv-name').textContent=nom;
+  document.getElementById('adm-mv-miqdor').value='';
+  document.getElementById('adm-mv-err').textContent='';
+  document.getElementById('adm-mv-overlay').style.display='flex';
+}}
+function doAdmMove() {{
+  var tur=document.getElementById('adm-mv-tur').value;
+  var miq=parseFloat(document.getElementById('adm-mv-miqdor').value);
+  var err=document.getElementById('adm-mv-err');
+  if(!miq||miq<=0){{err.textContent='Miqdor kiriting';return;}}
+  var btn=document.getElementById('adm-mv-ok');btn.disabled=true;
+  fetch('/web/ombor/quick-transfer',{{
+    method:'POST',headers:{{"Content-Type":"application/json"}},
+    body:JSON.stringify({{product_id:admMvId,dst_tur:tur,miqdor:miq}})
+  }}).then(r=>r.json()).then(d=>{{
+    btn.disabled=false;
+    if(d.ok){{ document.getElementById('adm-mv-overlay').style.display='none'; location.reload(); }}
+    else err.textContent=(d.error||'Xato');
+  }}).catch(e=>{{btn.disabled=false;err.textContent='Tarmoq xatosi';}});
+}}
 </script>"""
 
     return web.Response(
@@ -6747,6 +6840,55 @@ function quickChiqim(id, nom) {{
 
 
 @_require_auth
+@_require_auth
+async def ombor_admin_quick_transfer(request: web.Request):
+    """Admin panel: '→ Ko'chir' — asosiy ombordan yarim tayyorga ko'chiradi."""
+    sess = _current(request)
+    uid = sess.get("user_id") if sess else None
+    try:
+        body = await request.json()
+        pid = int(body.get("product_id"))
+        dst_tur = (body.get("dst_tur") or "").strip()
+        miqdor = float(body.get("miqdor") or 0)
+    except (ValueError, TypeError, Exception):
+        return web.json_response({"ok": False, "error": "Noto'g'ri ma'lumot"}, status=400)
+    if miqdor <= 0:
+        return web.json_response({"ok": False, "error": "Miqdor 0 dan katta bo'lsin"})
+    if not dst_tur:
+        return web.json_response({"ok": False, "error": "Tur tanlanmadi"})
+
+    from database.queries import update_product_miqdor as _upd
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import select as _sel
+        src = await db.get(WarehouseProduct, pid)
+        if not src:
+            return web.json_response({"ok": False, "error": "Mahsulot topilmadi"})
+        if float(src.miqdor or 0) < miqdor:
+            return web.json_response({"ok": False, "error": f"Yetarli emas (mavjud: {float(src.miqdor or 0):.0f})"})
+        await _upd(db, pid, -miqdor, uid, f"Ko'chirildi → yarim_tayyor/{dst_tur}")
+        dst = (await db.execute(_sel(WarehouseProduct).where(
+            WarehouseProduct.is_active == True,
+            WarehouseProduct.category == ProductCategory.yarim_tayyor,
+            WarehouseProduct.name == src.name,
+            WarehouseProduct.razmer == src.razmer,
+            WarehouseProduct.rang == src.rang,
+            WarehouseProduct.qism == src.qism,
+            WarehouseProduct.tur == dst_tur,
+        ).limit(1))).scalar_one_or_none()
+        if dst:
+            await _upd(db, dst.id, miqdor, uid, f"Ko'chirildi ← {src.category.value if src.category else '?'}")
+        else:
+            db.add(WarehouseProduct(
+                category=ProductCategory.yarim_tayyor, name=src.name, razmer=src.razmer,
+                rang=src.rang, tur=dst_tur, qism=src.qism, birlik=src.birlik, miqdor=miqdor,
+                min_threshold=src.min_threshold, yellow_threshold=src.yellow_threshold,
+                qalinlik=getattr(src, "qalinlik", None), is_active=True,
+            ))
+        await db.commit()
+        src2 = await db.get(WarehouseProduct, pid)
+        return web.json_response({"ok": True, "new_miqdor": float(src2.miqdor or 0)})
+
+
 async def ombor_cat_add(request: web.Request):
     """Kategoriyaga yangi mahsulot qo'shish."""
     cat_key = request.match_info.get("cat_key", "")
@@ -6784,6 +6926,43 @@ async def ombor_cat_add(request: web.Request):
             qalinlik = float(qalinlik_raw.replace(",",".")) if qalinlik_raw else None
         except ValueError:
             miqdor = min_t = 0; yel_t = 5; qalinlik = None
+
+        # Adyol/pastel — turdan AVTOMATIK aniqlash (omborchi panel bilan bir xil)
+        tur_v = _f("tur")
+        multi_cats = {"yarim_tayyor", "xromazes", "laminat_xromazes", "gofra_zagatovka"}
+        kind = "oddiy"
+        if cat_key in multi_cats:
+            if tur_v.startswith("adyol"):
+                kind = "adyol"
+            elif tur_v.startswith("pastel"):
+                kind = "pastel"
+
+        if kind in ("adyol", "pastel"):
+            third = "paddo" if kind == "pastel" else "yon"
+            def _fnum(k):
+                try:
+                    return float((_f(k, "0") or "0").replace(",", "."))
+                except ValueError:
+                    return 0.0
+            qismlar = [
+                ("tepa", _f("razmer_tepa") or razmer_raw, _fnum("qism_tepa")),
+                ("past", _f("razmer_past") or razmer_raw, _fnum("qism_past")),
+                (third,  _f("razmer_3") or razmer_raw,    _fnum("qism_3")),
+            ]
+            for qism_v, rz, miq in qismlar:
+                db.add(WarehouseProduct(
+                    category=cat_enum, name=_f("name") or "Noma'lum", tur=tur_v or None,
+                    razmer=rz, razmer_normalized=(_norm(rz) if rz else None),
+                    razmer_tur=_f("razmer_tur") or None, qism=qism_v,
+                    rang=_f("rang") or None, qalinlik=qalinlik, birlik=_f("birlik", "dona"),
+                    miqdor=miq, min_threshold=min_t, yellow_threshold=yel_t,
+                    holat=holat, holat_izoh=_f("holat_izoh") or None,
+                ))
+            await db.commit()
+            redirect = f"/web/ombor/{cat_key}"
+            if tur_v:
+                redirect += f"?tur={tur_v}"
+            raise web.HTTPFound(redirect)
 
         product = WarehouseProduct(
             category          = cat_enum,
@@ -7369,6 +7548,7 @@ def create_app() -> web.Application:
     app.router.add_get("/web/ombor",                 ombor_cats)
     app.router.add_get("/web/ombor/{cat_key}",       ombor_cat_detail)
     app.router.add_post("/web/ombor/{cat_key}/add",  ombor_cat_add)
+    app.router.add_post("/web/ombor/quick-transfer",  ombor_admin_quick_transfer)
     app.router.add_get("/web/login",         web_login)
     app.router.add_get("/w/{token}", token_login)
     # Omborchi va inspektor panellari — alohida modullar
