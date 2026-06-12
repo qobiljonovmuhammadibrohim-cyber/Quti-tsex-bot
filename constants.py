@@ -17,10 +17,12 @@ CAT_NAMES = {
 
 CATEGORY_TURLAR = {
     "yarim_tayyor": {
-        "tiger_uchun":         "✂️ Tiger kesish uchun",
-        "gofra_kley_uchun":    "🔨 Gofra kley uchun",
-        "xromazes_laminat":    "✨ Laminatsiya uchun xromazeslar",
-        "xromazes_gofra":      "🖨️ Gofra kley uchun xromazeslar",
+        "tiger_uchun":            "✂️ Tiger kesish uchun",
+        "gofra_kley_zagatovka":   "🔨 Gofra kley — zagatovka",
+        "gofra_kley_xromazes":    "🖨️ Gofra kley — xromazes",
+        "gofra_uchun_rulon":      "🌀 Gofra uchun rulon",
+        "list_qogoz_uchun_rulon": "📄 List qog'oz uchun rulon",
+        "zagatovka_uchun_gofra":  "✂️ Zagatovka uchun gofra",
         "stepler_uchun":       "📌 Stepler tikish uchun",
         "salafan_uchun":       "🎁 Rulonga salafan uchun",
         "yopish_uchun":        "🔗 Yopishtirish uchun",
@@ -65,7 +67,11 @@ BIRLIKLAR = {
 
 TRANSFER_ALLOWED = {
     "tiger_uchun": ["stepler_uchun", "adyol_tikish_uchun", "pastel_tikish_uchun", "yopish_uchun"],
-    "gofra_kley_uchun":    ["tiger_uchun"],
+    "gofra_kley_zagatovka":   ["tiger_uchun"],
+    "gofra_kley_xromazes":    ["tiger_uchun"],
+    "gofra_uchun_rulon":      [],
+    "list_qogoz_uchun_rulon": [],
+    "zagatovka_uchun_gofra":  ["gofra_kley_zagatovka"],
     "adyol_tikish_uchun":  ["adyol_qoqish_uchun"],
     "pastel_tikish_uchun": ["pastel_qoqish_uchun"],
     "adyol_qoqish_uchun":  ["xom_komple", "kapalak"],
@@ -103,7 +109,8 @@ ZAGATOVKA_TURLAR = {
 
 # Xromazeslar turlari
 XROMAZES_TURLAR = {
-    "adyol_pastel": "🛏 Adyol / Pastel",
+    "adyol":  "🛏 Adyol",
+    "pastel": "💼 Pastel",
     "poyabzal":     "👟 Poyabzal",
     "shirinlik":    "🍰 Shirinlik",
     "fast_food":    "🍔 Fast food",
@@ -112,7 +119,8 @@ XROMAZES_TURLAR = {
 
 # Laminat xromazeslar — xromazeslar bilan bir xil
 LAMINAT_XROMAZES_TURLAR = {
-    "adyol_pastel": "🛏 Adyol / Pastel (laminat)",
+    "adyol":  "🛏 Adyol (laminat)",
+    "pastel": "💼 Pastel (laminat)",
     "poyabzal":     "👟 Poyabzal (laminat)",
     "shirinlik":    "🍰 Shirinlik (laminat)",
     "fast_food":    "🍔 Fast food (laminat)",

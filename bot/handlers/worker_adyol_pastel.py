@@ -119,42 +119,58 @@ async def _show_tur_qoqish(cb, db, tur_key, title, prefix):
 
 
 
+def _komple_need(qism) -> int:
+    """1 komple uchun shu qismdan nechta kerak: yon=2, qolgan=1."""
+    return 2 if (qism or "").lower() == "yon" else 1
+
+
+def _max_komple(pieces) -> int:
+    """Set bo'yicha maksimal komple: min(miqdor // need)."""
+    vals = []
+    for p in pieces:
+        need = _komple_need(getattr(p, "qism", None))
+        vals.append(int(float(p.miqdor or 0) // need))
+    return min(vals) if vals else 0
+
+
 async def _show_grouped_sets(cb_or_msg, state: FSMContext, db, tur_key: str,
                               title: str, prefix: str) -> bool:
     """
     Kapalak/Yigish uchun mahsulotlarni SETLAR bo'yicha guruhlangan holda ko'rsatish.
-    Masalan: Istanbul adyol Katta (98x62.5) → YON: 48 | TEPA: 50 | PAST: 47
-    Max komple = eng kam qismdan hisoblanadi.
+    Guruhlash NOM + RANG bo'yicha (har qism o'z razmeriga ega, razmer guruhga kirmaydi).
+    Max komple = min(tepa, past, yon//2).
     """
     q = select(WarehouseProduct).where(
         WarehouseProduct.category == ProductCategory.yarim_tayyor,
         WarehouseProduct.is_active == True,
         WarehouseProduct.miqdor   >  0,
         WarehouseProduct.tur      == tur_key,
-    ).order_by(WarehouseProduct.razmer, WarehouseProduct.razmer_tur, WarehouseProduct.name)
+    ).order_by(WarehouseProduct.name, WarehouseProduct.rang)
     products = (await db.execute(q)).scalars().all()
     if not products:
         return False
 
-    # Razmer bo'yicha guruhlash (aniq razmer = bitta set)
+    # NOM + RANG bo'yicha guruhlash (xil = bitta set)
     groups: dict = {}
     for p in products:
-        key = (p.razmer or "norazmer", p.razmer_tur or "")
+        key = (p.name or "?", p.rang or "")
         if key not in groups:
             groups[key] = {
-                "razmer":     p.razmer,
-                "razmer_tur": p.razmer_tur,
-                "pieces":     [],
+                "name":   p.name or "?",
+                "rang":   p.rang or "",
+                "pieces": [],
             }
         groups[key]["pieces"].append(p)
 
     # Setlarni FSM ga saqlash (ID lar ro'yxati) — callback limitdan oshmasin
+    QORD = {"tepa": 0, "past": 1, "yon": 2, "paddo": 2}
     group_map = {}
     for idx, (key, gdata) in enumerate(groups.items()):
+        gdata["pieces"].sort(key=lambda x: QORD.get((x.qism or "").lower(), 9))
         group_map[str(idx)] = {
-            "ids":        [p.id for p in gdata["pieces"]],
-            "razmer":     gdata["razmer"],
-            "razmer_tur": gdata["razmer_tur"],
+            "ids":  [p.id for p in gdata["pieces"]],
+            "name": gdata["name"],
+            "rang": gdata["rang"],
         }
     await state.update_data(kapalak_groups=group_map)
 
@@ -163,37 +179,28 @@ async def _show_grouped_sets(cb_or_msg, state: FSMContext, db, tur_key: str,
 
     # Har set uchun alohida xabar (yaxshi ko'rinish)
     for idx, (key, gdata) in enumerate(groups.items()):
-        pieces    = gdata["pieces"]
-        razmer    = gdata["razmer"] or "—"
-        razmer_tur= gdata["razmer_tur"] or ""
+        pieces = gdata["pieces"]
 
-        # Qism nomlari va miqdorlari
         piece_lines = ""
-        min_count   = float("inf")
-        warn_pieces = []
-
         for p in pieces:
-            m = float(p.miqdor)
-            if m < min_count:
-                min_count = m
+            m    = float(p.miqdor)
+            need = _komple_need(p.qism)
             icon = "✅" if m > 0 else "❌"
-            piece_lines += f"  {icon} {p.name}: <b>{m:.0f}</b> {p.birlik}\n"
+            qlbl = (p.qism or "").upper()
+            rz   = f" ({p.razmer})" if p.razmer else ""
+            x2   = " ×2" if need == 2 else ""
+            piece_lines += f"  {icon} {qlbl}{rz}{x2}: <b>{m:.0f}</b> {p.birlik}\n"
 
-        max_komple = int(min_count)
-
-        # Yetishmayotgan qismlarni aniqlash
-        max_all  = max(float(p.miqdor) for p in pieces)
-        for p in pieces:
-            if float(p.miqdor) < max_all * 0.5:
-                warn_pieces.append(f"{p.name}: {p.miqdor:.0f} ta")
+        max_komple = _max_komple(pieces)
 
         warn_text = ""
-        if warn_pieces:
-            warn_text = f"\n⚠️ Kamchilik: {', '.join(warn_pieces)}"
+        if max_komple == 0:
+            warn_text = "\n⚠️ Komple chiqmaydi — qism yetishmaydi"
 
+        rang_t = f" | {gdata['rang']}" if gdata["rang"] else ""
         card = (
             f"{'─'*30}\n"
-            f"📦 <b>{razmer_tur} ({razmer})</b>\n"
+            f"📦 <b>{gdata['name']}{rang_t}</b>\n"
             f"{piece_lines}"
             f"▶️ Maksimal: <b>{max_komple} ta komple</b>"
             f"{warn_text}"
@@ -203,7 +210,7 @@ async def _show_grouped_sets(cb_or_msg, state: FSMContext, db, tur_key: str,
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text=f"✅ Bu setdan kapalak qilish ({max_komple} ta max)",
+                    text=f"✅ Bu setdan olish ({max_komple} ta max)",
                     callback_data=f"{prefix}_g{idx}",
                 )]
             ]),
@@ -501,20 +508,24 @@ async def aq_grp_select(cb: CallbackQuery, state: FSMContext, db: AsyncSession):
     if not group:
         await cb.answer("Set topilmadi"); return
 
+    rang_t = f" | {group['rang']}" if group.get("rang") else ""
     await state.update_data(
         group_ids=group["ids"],
-        mahsulot_nomi=f"Adyol {group['razmer_tur'] or ''} ({group['razmer'] or '?'})".strip(),
-        razmer=group["razmer"],
-        razmer_tur=group["razmer_tur"],
+        mahsulot_nomi=group.get("name", "Adyol"),
+        rang=group.get("rang", ""),
         src_product_id=group["ids"][0] if group["ids"] else None,
     )
     pieces     = [p for pid in group["ids"] if (p := await db.get(WarehouseProduct, pid))]
-    max_komple = int(min(float(p.miqdor) for p in pieces)) if pieces else 0
+    max_komple = _max_komple(pieces)
     narx       = data.get("birlik_narx", 0)
-    piece_info = "\n".join(f"  • {p.name}: {p.miqdor:.0f} ta" for p in pieces)
+    piece_info = "\n".join(
+        f"  • {(p.qism or '').upper()}{' ×2' if _komple_need(p.qism)==2 else ''}"
+        f"{' ('+p.razmer+')' if p.razmer else ''}: {p.miqdor:.0f} ta"
+        for p in pieces
+    )
 
     await cb.message.answer(
-        f"✅ Set tanlandi:\n{piece_info}\n\n"
+        f"✅ Set: <b>{group.get('name','')}{rang_t}</b>\n{piece_info}\n\n"
         f"▶️ Maksimal: <b>{max_komple} ta komple</b>\n"
         f"💰 Narx: {narx:,.0f} soum/komple\n\n"
         f"Nechta kapalak qilmoqchisiz? (max {max_komple})",
@@ -585,15 +596,18 @@ async def aq_soni(m: Message, state: FSMContext, db: AsyncSession):
     jami   = narx * soni
     tur    = data.get("tur", "xom_komple")
 
-    # Grouped set bo'lsa — yetishmovchilik ogohlantirishi
+    # Grouped set bo'lsa — yetishmovchilik ogohlantirishi (yon ×2 hisobida)
     group_ids = data.get("group_ids", [])
     warns     = []
     if group_ids:
         for pid in group_ids:
             p = await db.get(WarehouseProduct, pid)
-            if p and float(p.miqdor) < soni:
-                deficit = soni - int(float(p.miqdor))
-                warns.append(f"⚠️ {p.name}: {p.miqdor:.0f} ta bor, {deficit} ta yetishmaydi!")
+            if p:
+                need = soni * _komple_need(p.qism)
+                if float(p.miqdor) < need:
+                    deficit = need - int(float(p.miqdor))
+                    qlbl = (p.qism or p.name or "").upper()
+                    warns.append(f"⚠️ {qlbl}: {p.miqdor:.0f} ta bor, {need} ta kerak ({deficit} yetishmaydi)!")
 
     if warns:
         warn_text = "\n".join(warns)

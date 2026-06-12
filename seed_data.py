@@ -64,7 +64,7 @@ SEED_PRODUCTS = [
 
     # ── YARIM TAYYOR ─────────────────────────────────────────────────────────
     {"category": "yarim_tayyor", "name": "Tiger kesish uchun material", "tur": "tiger_uchun",         "birlik": "dona", "miqdor": 0},
-    {"category": "yarim_tayyor", "name": "Gofra kley uchun material",   "tur": "gofra_kley_uchun",    "birlik": "dona", "miqdor": 0},
+    {"category": "yarim_tayyor", "name": "Gofra kley uchun material",   "tur": "gofra_kley_zagatovka",    "birlik": "dona", "miqdor": 0},
     {"category": "yarim_tayyor", "name": "Stepler uchun material",      "tur": "stepler_uchun",       "birlik": "dona", "miqdor": 0},
     {"category": "yarim_tayyor", "name": "Salafan uchun material",      "tur": "salafan_uchun",       "birlik": "dona", "miqdor": 0},
     {"category": "yarim_tayyor", "name": "Yopish uchun material",       "tur": "yopish_uchun",        "birlik": "dona", "miqdor": 0},

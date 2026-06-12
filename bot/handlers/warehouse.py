@@ -43,20 +43,22 @@ CAT_NAMES = {
 
 # Yarim tayyor turlarining to'liq ro'yxati va ko'rsatilishi
 YARIM_TAYYOR_TURLAR = {
-    "tiger_uchun":         "Tiger kesish uchun",
-    "gofra_kley_uchun":    "Gofra kley uchun",
-    "xromazes_laminat":    "Laminatsiya uchun xromazeslar",
-    "xromazes_gofra":      "Gofra kley uchun xromazeslar",
-    "stepler_uchun":       "Stepler tikish uchun",
-    "salafan_uchun":       "Rulonga salafan uchun",
-    "yopish_uchun":        "Yopishtirish uchun",
-    "adyol_tikish_uchun":  "Adyol tikish uchun",
-    "pastel_tikish_uchun": "Pastel tikish uchun",
-    "adyol_qoqish_uchun":  "Adyol qoqish uchun",
-    "pastel_qoqish_uchun": "Pastel qoqish uchun",
-    "xom_komple":          "Xom komple",
-    "kapalak":             "Kapalak",
-    "boshqa":              "Boshqa",
+    "tiger_uchun":            "Tiger kesish uchun",
+    "gofra_kley_zagatovka":   "Gofra kley — zagatovka",
+    "gofra_kley_xromazes":    "Gofra kley — xromazes",
+    "gofra_uchun_rulon":      "Gofra uchun rulon",
+    "list_qogoz_uchun_rulon": "List qog'oz uchun rulon",
+    "zagatovka_uchun_gofra":  "Zagatovka uchun gofra",
+    "stepler_uchun":          "Stepler tikish uchun",
+    "salafan_uchun":          "Rulonga salafan uchun",
+    "yopish_uchun":           "Yopishtirish uchun",
+    "adyol_tikish_uchun":     "Adyol tikish uchun",
+    "pastel_tikish_uchun":    "Pastel tikish uchun",
+    "adyol_qoqish_uchun":     "Adyol qoqish uchun",
+    "pastel_qoqish_uchun":    "Pastel qoqish uchun",
+    "xom_komple":             "Xom komple",
+    "kapalak":                "Kapalak",
+    "boshqa":                 "Boshqa",
 }
 
 # Kategoriyalar uchun standart birlik
@@ -383,11 +385,13 @@ async def kirim_nomi(m: Message, state: FSMContext):
     # Adyol/Pastel qismlari uchun qism so'rash
     from constants import ADYOL_QISM_TURLAR, PASTEL_QISM_TURLAR
     need_qism = (
-        (cat in xrm_cats and tur in ("adyol_pastel",)) or
+        (cat in xrm_cats and tur in ("adyol", "pastel")) or
+        (cat == "gofra_zagatovka" and tur in ("adyol", "pastel")) or
         (cat == "yarim_tayyor" and tur in (
             "adyol_tikish_uchun", "pastel_tikish_uchun",
             "adyol_qoqish_uchun", "pastel_qoqish_uchun",
             "xom_komple", "kapalak",
+            "gofra_kley_zagatovka", "gofra_kley_xromazes", "tiger_uchun",
         ))
     )
 
@@ -1452,10 +1456,12 @@ YT_PER_PAGE = 10
 
 # Tur ikonlari
 YT_ICONS = {
-    "tiger_uchun":         "✂️",
-    "gofra_kley_uchun":    "🔨",
-    "xromazes_laminat":    "✨",
-    "xromazes_gofra":      "🖨️",
+    "tiger_uchun":            "✂️",
+    "gofra_kley_zagatovka":   "🔨",
+    "gofra_kley_xromazes":    "🖨️",
+    "gofra_uchun_rulon":      "🌀",
+    "list_qogoz_uchun_rulon": "📄",
+    "zagatovka_uchun_gofra":  "✂️",
     "stepler_uchun":       "📌",
     "salafan_uchun":       "🎁",
     "yopish_uchun":        "🔗",
@@ -2031,8 +2037,9 @@ async def _yt_menu(target, db):
         counts[tur_key] = {"items": row[0], "total": int(row[1])}
 
     YT_ICONS = {
-        "tiger_uchun":"✂️","gofra_kley_uchun":"🔨","xromazes_laminat":"✨",
-        "xromazes_gofra":"🖨️","stepler_uchun":"📌","salafan_uchun":"🎁",
+        "tiger_uchun":"✂️","gofra_kley_zagatovka":"🔨","gofra_kley_xromazes":"🖨️",
+        "gofra_uchun_rulon":"🌀","list_qogoz_uchun_rulon":"📄","zagatovka_uchun_gofra":"✂️",
+        "stepler_uchun":"📌","salafan_uchun":"🎁",
         "yopish_uchun":"🔗","adyol_tikish_uchun":"🧵","pastel_tikish_uchun":"💼",
         "adyol_qoqish_uchun":"📫","pastel_qoqish_uchun":"📬","xom_komple":"📦",
         "kapalak":"🦋","boshqa":"📝",

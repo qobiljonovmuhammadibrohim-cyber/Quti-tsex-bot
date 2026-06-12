@@ -179,227 +179,232 @@ def h(text) -> str:
 
 CSS = """
 :root{
-  --bg:#07090f;--bg2:#0d1117;--bg3:#161b26;--bg4:#1c2333;--bg5:#222d42;
-  --border:#1e2d45;--border2:#253554;
-  --accent:#3b82f6;--accent-dim:rgba(59,130,246,.15);
-  --green:#10b981;--green-dim:rgba(16,185,129,.12);
-  --yellow:#f59e0b;--yellow-dim:rgba(245,158,11,.12);
-  --red:#ef4444;--red-dim:rgba(239,68,68,.12);
-  --purple:#8b5cf6;--purple-dim:rgba(139,92,246,.12);
-  --cyan:#06b6d4;--cyan-dim:rgba(6,182,212,.12);
-  --text:#e2e8f0;--text2:#64748b;--text3:#94a3b8;
-  --r:10px;
+  --bg:#F4F6FA;--bg2:#FFFFFF;--bg3:#F6F7FB;--bg4:#EDF0F7;--bg5:#E4E8F2;
+  --border:#ECEFF6;--border2:#DDE2EF;
+  --accent:#4F46E5;--accent-dim:#EEF0FF;
+  --green:#0E9F6E;--green-dim:#E6F7F1;
+  --yellow:#D97706;--yellow-dim:#FEF3E2;
+  --red:#E02D2D;--red-dim:#FDECEC;
+  --purple:#7C3AED;--purple-dim:#F3E8FF;
+  --cyan:#0891B2;--cyan-dim:#E0F4F9;
+  --text:#15192B;--text2:#7A82A0;--text3:#535C78;
+  --r:16px;
+  --sh:0 1px 2px rgba(21,25,43,.04),0 6px 20px rgba(21,25,43,.06);
+  --sh2:0 10px 30px rgba(21,25,43,.12);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:var(--bg2)}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-.sidebar{width:220px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);
+body{font-family:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.sidebar{width:228px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);
   display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto}
-.sb-logo{padding:14px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.sb-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);
-  border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
-.sb-logo h1{font-size:12px;font-weight:800;color:#fff}
-.sb-logo span{font-size:10px;color:var(--text2)}
-.sb-nav{flex:1;padding:6px 5px}
-.nav-sec{margin-bottom:12px}
-.nav-sec-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
-  color:var(--text2);padding:0 8px;margin-bottom:2px;display:block}
-.nav-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;
-  color:var(--text3);text-decoration:none;transition:all .15s;margin-bottom:1px;font-size:12.5px;font-weight:600}
+.sb-logo{padding:16px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sb-logo-icon{width:38px;height:38px;background:linear-gradient(135deg,#4F46E5,#8B5CF6);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;
+  box-shadow:0 6px 14px rgba(79,70,229,.3)}
+.sb-logo h1{font-size:13px;font-weight:800;color:var(--text)}
+.sb-logo span{font-size:10.5px;color:var(--text2);font-weight:600}
+.sb-nav{flex:1;padding:8px 8px}
+.nav-sec{margin-bottom:14px}
+.nav-sec-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--text2);padding:0 10px;margin-bottom:4px;display:block}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:11px;
+  color:var(--text2);text-decoration:none;transition:all .15s;margin-bottom:2px;font-size:13px;font-weight:700}
 .nav-item:hover{background:var(--bg3);color:var(--text)}
 .nav-item.active{background:var(--accent-dim);color:var(--accent)}
-.sb-footer{padding:8px 12px;border-top:1px solid var(--border);font-size:10px;color:var(--text2)}
-.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh}
-.topbar{height:46px;background:var(--bg2);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 16px;gap:8px;position:sticky;top:0;z-index:50}
-.topbar-title{font-size:13px;font-weight:700;flex:1}
+.sb-footer{padding:10px 14px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text2);font-weight:600}
+.main{margin-left:228px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{height:54px;background:rgba(244,246,250,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 18px;gap:10px;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:15px;font-weight:800;flex:1}
 .topbar-right{display:flex;align-items:center;gap:8px}
-.content{flex:1;padding:14px 16px}
-.stats-grid{display:grid;gap:9px;margin-bottom:13px}
-.sg-5{grid-template-columns:repeat(5,1fr)}
-.sg-4{grid-template-columns:repeat(4,1fr)}
+.content{flex:1;padding:16px 18px}
+.stats-grid{display:grid;gap:12px;margin-bottom:14px}
 .sg-3{grid-template-columns:repeat(3,1fr)}
-.sg-2{grid-template-columns:1fr 1fr}
-.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
-.stat-card.cl-green{border-left:3px solid var(--green)}
-.stat-card.cl-yellow{border-left:3px solid var(--yellow)}
-.stat-card.cl-red{border-left:3px solid var(--red)}
-.stat-card.cl-blue{border-left:3px solid var(--accent)}
-.stat-card.cl-purple{border-left:3px solid var(--purple)}
-.stat-card.cl-cyan{border-left:3px solid var(--cyan)}
-.s-label{font-size:9.5px;color:var(--text2);font-weight:600;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
-.s-value{font-size:20px;font-weight:800;line-height:1;font-family:monospace}
-.s-sub{font-size:10px;color:var(--text2);margin-top:3px}
+.sg-4{grid-template-columns:repeat(4,1fr)}
+.sg-5{grid-template-columns:repeat(5,1fr)}
+.stat-card{background:var(--bg2);border:none;border-radius:var(--r);padding:15px 16px;box-shadow:var(--sh)}
+.stat-card.cl-green{border-left:none;box-shadow:var(--sh),inset 4px 0 0 var(--green)}
+.stat-card.cl-yellow{box-shadow:var(--sh),inset 4px 0 0 var(--yellow)}
+.stat-card.cl-red{box-shadow:var(--sh),inset 4px 0 0 var(--red)}
+.stat-card.cl-blue{box-shadow:var(--sh),inset 4px 0 0 var(--accent)}
+.stat-card.cl-purple{box-shadow:var(--sh),inset 4px 0 0 var(--purple)}
+.stat-card.cl-cyan{box-shadow:var(--sh),inset 4px 0 0 var(--cyan)}
+.s-label{font-size:10.5px;color:var(--text2);font-weight:800;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.s-value{font-size:23px;font-weight:800;line-height:1;font-family:'Plus Jakarta Sans',monospace}
+.s-sub{font-size:11px;color:var(--text2);margin-top:4px;font-weight:600}
 .cv-green{color:var(--green)}.cv-yellow{color:var(--yellow)}
 .cv-red{color:var(--red)}.cv-blue{color:var(--accent)}
 .cv-purple{color:var(--purple)}.cv-cyan{color:var(--cyan)}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:11px}
-.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;flex-wrap:wrap;gap:7px}
-.card-title{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:11px}
-.grid-main{display:grid;grid-template-columns:2fr 1fr;gap:11px}
-.tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:11px;border-bottom:1px solid var(--border);padding-bottom:9px}
-.tab{padding:6px 13px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;
-  border:none;background:none;color:var(--text2);text-decoration:none;transition:all .15s}
-.tab:hover{background:var(--bg3);color:var(--text)}
-.tab.active{background:var(--accent);color:#fff}
-.cat-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
-.cat-tab{padding:5px 11px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);
-  color:var(--text3);text-decoration:none;font-size:11.5px;font-weight:700;transition:all .15s}
-.cat-tab:hover{background:var(--bg4);color:var(--text)}
-.cat-tab.active{background:var(--accent-dim);border-color:rgba(59,130,246,.4);color:var(--accent)}
-.toolbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:11px}
-.toolbar-left{display:flex;gap:6px;flex:1;flex-wrap:wrap;align-items:center}
-.search-wrap{position:relative;flex:1;min-width:150px;max-width:280px}
-.search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);
-  border-radius:7px;padding:6px 10px 6px 28px;color:var(--text);font-size:12px;outline:none}
+.card{background:var(--bg2);border:none;border-radius:var(--r);padding:16px;margin-bottom:12px;box-shadow:var(--sh)}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.card-title{font-size:14px;font-weight:800;display:flex;align-items:center;gap:7px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.grid-main{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;border-bottom:none;padding-bottom:4px}
+.tab{padding:8px 16px;border-radius:99px;font-size:12.5px;font-weight:800;cursor:pointer;
+  border:none;background:var(--bg2);color:var(--text2);text-decoration:none;transition:all .15s;box-shadow:var(--sh)}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--accent);color:#fff;box-shadow:0 6px 14px rgba(79,70,229,.3)}
+.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.cat-tab{padding:7px 14px;border-radius:99px;background:var(--bg2);border:none;box-shadow:var(--sh);
+  color:var(--text2);text-decoration:none;font-size:12px;font-weight:800;transition:all .15s}
+.cat-tab:hover{color:var(--text)}
+.cat-tab.active{background:var(--accent);color:#fff;box-shadow:0 6px 14px rgba(79,70,229,.3)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar-left{display:flex;gap:7px;flex:1;flex-wrap:wrap;align-items:center}
+.search-wrap{position:relative;flex:1;min-width:160px;max-width:300px}
+.search-wrap input{width:100%;background:var(--bg2);border:1px solid var(--border);
+  border-radius:12px;padding:9px 12px 9px 32px;color:var(--text);font-size:13px;outline:none;box-shadow:var(--sh)}
 .search-wrap input:focus{border-color:var(--accent)}
-.si{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text2);font-size:12px}
-.fsel{background:var(--bg3);border:1px solid var(--border);border-radius:7px;
-  padding:6px 9px;color:var(--text);font-size:12px;outline:none;cursor:pointer}
+.si{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text2);font-size:13px}
+.fsel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:9px 12px;color:var(--text);font-size:13px;outline:none;cursor:pointer;font-weight:600;box-shadow:var(--sh)}
 .fsel:focus{border-color:var(--accent)}
-.fsel option{background:var(--bg3)}
-.tbl-wrap{overflow-x:auto}
-.badge{display:inline-flex;align-items:center;padding:1px 7px;border-radius:10px;font-size:10.5px;font-weight:700;background:var(--bg3);color:var(--text2)}
-.badge.red{background:rgba(239,68,68,.12);color:#ef4444}
-.badge.green{background:rgba(16,185,129,.12);color:#10b981}
-.badge.yellow{background:rgba(245,158,11,.12);color:#f59e0b}
+.fsel option{background:var(--bg2)}
+.tbl-wrap{overflow-x:auto;border-radius:12px}
 .ml4{margin-left:4px}
 .mb12{margin-bottom:12px}
-.btn-sm{padding:3px 8px!important;font-size:10.5px!important}
-.btn-green{background:#10b981!important;color:#fff!important}
-.btn-green:hover{background:#059669!important}
-.btn-red{background:#ef4444!important;color:#fff!important}
-.btn-red:hover{background:#dc2626!important}
-table{width:100%;border-collapse:collapse;font-size:11.5px}
-th{background:var(--bg3);color:var(--text2);font-size:9.5px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.06em;padding:7px 10px;text-align:left;
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.07em;padding:9px 12px;text-align:left;
   border-bottom:1px solid var(--border);white-space:nowrap}
-td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+th:first-child{border-radius:10px 0 0 0}
+th:last-child{border-radius:0 10px 0 0}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:rgba(255,255,255,.01)}
-.td-n{font-family:monospace;font-weight:600}
-.item-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
-  padding:12px 14px;margin-bottom:7px;transition:border-color .15s}
-.item-card:hover{border-color:rgba(59,130,246,.3)}
-.ic-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;gap:7px}
-.ic-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.ic-sub{font-size:11px;color:var(--text2);margin-top:2px}
-.ic-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text2);margin-bottom:7px}
+tr:hover td{background:var(--bg3)}
+.td-n{font-family:'Plus Jakarta Sans',monospace;font-weight:700}
+.item-card{background:var(--bg2);border:none;border-radius:var(--r);
+  padding:14px 16px;margin-bottom:9px;transition:all .15s;box-shadow:var(--sh)}
+.item-card:hover{transform:translateY(-1px);box-shadow:var(--sh2)}
+.ic-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:7px;gap:8px}
+.ic-title{font-size:14px;font-weight:800;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ic-sub{font-size:12px;color:var(--text2);margin-top:2px;font-weight:600}
+.ic-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600}
 .ic-meta strong{color:var(--text)}
-.ic-actions{display:flex;gap:5px;flex-wrap:wrap}
-.badge{display:inline-flex;align-items:center;gap:2px;padding:2px 7px;
-  border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
+.ic-actions{display:flex;gap:6px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;
+  border-radius:99px;font-size:11px;font-weight:800;white-space:nowrap;background:var(--bg4);color:var(--text3)}
+.badge.red{background:var(--red-dim);color:var(--red)}
+.badge.green{background:var(--green-dim);color:var(--green)}
+.badge.yellow{background:var(--yellow-dim);color:var(--yellow)}
 .bg{background:var(--green-dim);color:var(--green)}
 .by{background:var(--yellow-dim);color:var(--yellow)}
 .br{background:var(--red-dim);color:var(--red)}
 .bb{background:var(--accent-dim);color:var(--accent)}
 .bp{background:var(--purple-dim);color:var(--purple)}
 .bc{background:var(--cyan-dim);color:var(--cyan)}
-.bgr{background:rgba(148,163,184,.08);color:var(--text2)}
-.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:7px;
-  font-size:11.5px;font-weight:700;cursor:pointer;border:none;text-decoration:none;
+.bgr{background:var(--bg4);color:var(--text2)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 15px;border-radius:11px;
+  font-size:12.5px;font-weight:800;cursor:pointer;border:none;text-decoration:none;
   transition:all .15s;white-space:nowrap}
-.btn:active{transform:scale(.97)}
-.btn-p{background:var(--accent);color:#fff}
-.btn-p:hover{background:#2563eb}
-.btn-g{background:var(--green);color:#fff}
-.btn-g:hover{background:#059669}
-.btn-s{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
-.btn-s:hover{background:var(--bg4)}
-.btn-d{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,.2)}
-.btn-d:hover{background:rgba(239,68,68,.2)}
-.btn-w{background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(245,158,11,.2)}
-.btn-cy{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(6,182,212,.2)}
-.btn-pu{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(139,92,246,.2)}
-.btn-sm{padding:3px 8px;font-size:10.5px}
-.btn-xs{padding:2px 6px;font-size:10px}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.fg{margin-bottom:10px}
-.fl{display:block;font-size:9.5px;font-weight:700;color:var(--text2);
-  margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+.btn:active{transform:scale(.96)}
+.btn-p{background:var(--accent);color:#fff;box-shadow:0 5px 12px rgba(79,70,229,.28)}
+.btn-p:hover{background:#4338CA}
+.btn-g{background:var(--green);color:#fff;box-shadow:0 5px 12px rgba(14,159,110,.28)}
+.btn-g:hover{background:#0B8459}
+.btn-s{background:var(--bg2);color:var(--text);border:1px solid var(--border2);box-shadow:var(--sh)}
+.btn-s:hover{background:var(--bg3)}
+.btn-d{background:var(--red-dim);color:var(--red)}
+.btn-d:hover{background:#FAD9D9}
+.btn-w{background:var(--yellow-dim);color:var(--yellow)}
+.btn-cy{background:var(--cyan-dim);color:var(--cyan)}
+.btn-pu{background:var(--purple-dim);color:var(--purple)}
+.btn-sm{padding:5px 11px!important;font-size:11px!important;border-radius:9px!important}
+.btn-xs{padding:3px 8px;font-size:10.5px;border-radius:8px}
+.btn-green{background:var(--green)!important;color:#fff!important}
+.btn-green:hover{background:#0B8459!important}
+.btn-red{background:var(--red)!important;color:#fff!important}
+.btn-red:hover{background:#C42222!important}
+.btn-outline{background:var(--bg2);color:var(--text2);border:1px solid var(--border2)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fg{margin-bottom:11px}
+.fl{display:block;font-size:10px;font-weight:800;color:var(--text2);
+  margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
 input[type=text],input[type=number],input[type=date],
 input[type=password],select,textarea{
-  width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;
-  padding:7px 10px;color:var(--text);font-size:12px;outline:none;transition:border-color .15s}
-input:focus,select:focus,textarea:focus{border-color:var(--accent)}
-select option{background:var(--bg3)}
-textarea{resize:vertical;min-height:60px}
-.input-hint{font-size:10px;color:var(--text2);margin-top:2px}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+  width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;
+  padding:9px 12px;color:var(--text);font-size:13px;outline:none;transition:all .15s;font-weight:600;
+  font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+select option{background:var(--bg2)}
+textarea{resize:vertical;min-height:64px}
+.input-hint{font-size:10.5px;color:var(--text2);margin-top:3px;font-weight:600}
+.overlay{display:none;position:fixed;inset:0;background:rgba(21,25,43,.45);
   z-index:400;align-items:center;justify-content:center;backdrop-filter:blur(5px)}
 .overlay.open{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;
-  padding:20px;max-width:480px;width:94%;box-shadow:0 20px 60px rgba(0,0,0,.6);
+.modal{background:var(--bg2);border:none;border-radius:20px;
+  padding:22px;max-width:480px;width:94%;box-shadow:var(--sh2);
   max-height:90vh;overflow-y:auto}
 .modal.wide{max-width:640px}
 .modal.full{max-width:860px}
-.modal-title{font-size:14px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:7px}
-.modal-sub{font-size:11.5px;color:var(--text2);margin-bottom:14px}
-.modal-footer{display:flex;justify-content:flex-end;gap:7px;
-  margin-top:14px;padding-top:11px;border-top:1px solid var(--border)}
-.alert{padding:8px 11px;border-radius:7px;font-size:11.5px;margin-bottom:9px;
-  display:flex;align-items:center;gap:7px;font-weight:600}
-.alert-w{background:var(--yellow-dim);border:1px solid rgba(245,158,11,.25);color:var(--yellow)}
-.alert-r{background:var(--red-dim);border:1px solid rgba(239,68,68,.25);color:var(--red)}
-.alert-g{background:var(--green-dim);border:1px solid rgba(16,185,129,.25);color:var(--green)}
-.alert-b{background:var(--accent-dim);border:1px solid rgba(59,130,246,.25);color:var(--accent)}
-.pagination{display:flex;align-items:center;gap:3px;padding-top:9px;flex-wrap:wrap}
-.pagination a{padding:4px 8px;border-radius:5px;font-size:10.5px;border:1px solid var(--border);
-  background:var(--bg3);color:var(--text2);text-decoration:none;font-weight:600}
-.pagination a:hover{background:var(--bg4);color:var(--text)}
-.pagination a.act{background:var(--accent);color:#fff;border-color:var(--accent)}
-.pinfo{font-size:10.5px;color:var(--text2);padding:0 5px}
-.mono{font-family:monospace}
+.modal-title{font-size:16px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.modal-sub{font-size:12.5px;color:var(--text2);margin-bottom:15px;font-weight:600}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;
+  margin-top:15px;padding-top:13px;border-top:1px solid var(--border)}
+.alert{padding:10px 13px;border-radius:12px;font-size:12.5px;margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;font-weight:700}
+.alert-w{background:var(--yellow-dim);border:none;color:var(--yellow)}
+.alert-r{background:var(--red-dim);border:none;color:var(--red)}
+.alert-g{background:var(--green-dim);border:none;color:var(--green)}
+.alert-b{background:var(--accent-dim);border:none;color:var(--accent)}
+.pagination{display:flex;align-items:center;gap:4px;padding-top:10px;flex-wrap:wrap}
+.pagination a{padding:6px 11px;border-radius:9px;font-size:11.5px;border:none;
+  background:var(--bg2);color:var(--text2);text-decoration:none;font-weight:800;box-shadow:var(--sh)}
+.pagination a:hover{color:var(--text)}
+.pagination a.act{background:var(--accent);color:#fff}
+.pinfo{font-size:11px;color:var(--text2);padding:0 6px;font-weight:600}
+.mono{font-family:'Plus Jakarta Sans',monospace}
 .fw7{font-weight:700}.fw8{font-weight:800}
-.t-sm{font-size:11px}.t-xs{font-size:10px}
+.t-sm{font-size:11.5px}.t-xs{font-size:10.5px}
 .t-muted{color:var(--text2)}.t-dim{color:var(--text3)}
-.tag{display:inline-flex;background:var(--bg4);border:1px solid var(--border2);
-  padding:1px 6px;border-radius:4px;font-size:9.5px;color:var(--text3);font-weight:600}
-.divider{border:none;border-top:1px solid var(--border);margin:9px 0}
-.empty-state{text-align:center;padding:40px 20px;color:var(--text2)}
-.stock-bar{display:flex;align-items:center;gap:6px}
-.bar-track{flex:1;background:var(--bg4);border-radius:3px;height:4px;
-  overflow:hidden;min-width:50px;max-width:80px;border:1px solid var(--border)}
-.bar-fill{height:100%;border-radius:3px}
-.worker-avatar{width:32px;height:32px;border-radius:50%;
+.tag{display:inline-flex;background:var(--bg4);border:none;
+  padding:2px 8px;border-radius:7px;font-size:10px;color:var(--text3);font-weight:700}
+.divider{border:none;border-top:1px solid var(--border);margin:10px 0}
+.empty-state{text-align:center;padding:44px 20px;color:var(--text2);font-weight:600}
+.stock-bar{display:flex;align-items:center;gap:7px}
+.bar-track{flex:1;background:var(--bg4);border-radius:99px;height:6px;
+  overflow:hidden;min-width:50px;max-width:90px;border:none}
+.bar-fill{height:100%;border-radius:99px}
+.worker-avatar{width:36px;height:36px;border-radius:12px;
   background:linear-gradient(135deg,var(--accent),var(--purple));
   display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff}
-.toast{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:7px}
-.toast-item{background:var(--bg2);border:1px solid var(--border2);border-radius:9px;
-  padding:10px 16px;font-size:12px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.4);
-  animation:slideIn .25s ease;display:flex;align-items:center;gap:8px}
+.toast{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg2);border:none;border-radius:14px;
+  padding:12px 18px;font-size:13px;font-weight:800;box-shadow:var(--sh2);
+  animation:slideIn .25s ease;display:flex;align-items:center;gap:9px}
 @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 
 /* ═══ MOBIL MOSLASHTIRISH (telefon va planshet) ═══ */
 @media(max-width:480px){
   body{font-size:13px}
   .sidebar{display:none}
-  .sidebar.open{display:flex;position:fixed;top:0;left:0;width:80%;height:100vh;z-index:1000}
+  .sidebar.open{display:flex;position:fixed;top:0;left:0;width:82%;height:100vh;z-index:1000;box-shadow:var(--sh2)}
   .main{margin-left:0;padding:12px 8px}
   .hamburger{display:flex !important;position:fixed;top:12px;left:12px;z-index:999;
-    background:var(--primary);color:white;width:40px;height:40px;border-radius:8px;
-    align-items:center;justify-content:center;border:none;cursor:pointer;font-size:20px}
-  .card{padding:12px;border-radius:10px}
+    background:var(--accent);color:white;width:42px;height:42px;border-radius:13px;
+    align-items:center;justify-content:center;border:none;cursor:pointer;font-size:20px;
+    box-shadow:0 6px 14px rgba(79,70,229,.35)}
+  .card{padding:13px;border-radius:14px}
   h1{font-size:18px !important}
   h2{font-size:15px !important}
   h3{font-size:14px !important}
   table{font-size:11px}
-  th,td{padding:6px 4px !important}
-  .btn{padding:6px 10px;font-size:11px}
-  .btn-sm{padding:4px 8px;font-size:10px}
-  .stat-card{padding:10px}
+  th,td{padding:7px 5px !important}
+  .btn{padding:7px 11px;font-size:11.5px}
+  .btn-sm{padding:4px 9px;font-size:10.5px}
+  .stat-card{padding:11px}
   .stat-num{font-size:20px !important}
   .stat-label{font-size:10px}
   .filters{flex-direction:column;gap:6px}
   .filters > *{width:100%}
   .grid-2,.grid-3,.grid-4{grid-template-columns:1fr !important}
-  .modal{max-width:96% !important;padding:14px !important;font-size:13px}
+  .modal{max-width:96% !important;padding:15px !important;font-size:13px}
   .header-bar{flex-direction:column;gap:8px;padding:10px 12px}
   .search-wrap{max-width:100% !important;width:100%}
-  .badge{font-size:9px;padding:1px 5px}
+  .badge{font-size:9.5px;padding:2px 7px}
   .nav-section{padding:6px 10px}
   .nav-link{padding:8px 12px;font-size:12px}
   .pg-num{padding:4px 8px;font-size:11px}
@@ -499,6 +504,7 @@ def _base(title: str, active: str, content: str, extra_js: str = "", role: str =
         ("rulon-hisobot",    "🌀", "Rulon hisobot",    "/web/rulon-hisobot"),
         ("inventory_health", "🏥", "Ombor salomatligi","/web/health"),
         ("zero-stock",       "⚠️", "Tugaganlar",         "/web/zero-stock"),
+        ("tayyor-chiqim",    "📤", "Tayyor chiqimi",     "/web/tayyor-chiqim"),
         ("activity",         "📡", "Real-time oqim",  "/web/activity"),
         ("quality",          "✅", "Sifat boshqaruvi", "/web/quality"),
         ("workers",          "👥", "Ishchilar",         "/web/workers"),
@@ -534,7 +540,7 @@ def _base(title: str, active: str, content: str, extra_js: str = "", role: str =
     if role == "omborchi":
         # Omborchi — faqat ombor bilan bog'liq
         sections = [
-            ("📦 Ombor", ["ombor-home", "ombor-ops", "warehouse", "zero-stock"]),
+            ("📦 Ombor", ["ombor-home", "ombor-ops", "warehouse", "zero-stock", "tayyor-chiqim"]),
             ("Ombor bo'limlari", ["rulon","gofra","zagatovka","xromazes","laminat","yarim","qolip","adyol-zp","stanok-zp"]),
             ("📋 Operatsiyalar", ["ombor-logs", "ombor-report"]),
         ]
@@ -573,6 +579,8 @@ def _base(title: str, active: str, content: str, extra_js: str = "", role: str =
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{h(title)} — Quti Tsexi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>{CSS}
 
 
@@ -1218,7 +1226,7 @@ def _base(title: str, active: str, content: str, extra_js: str = "", role: str =
   font-size: 11px;
   font-weight: 600;
   background: rgba(99,102,241,0.15);
-  color: #a5b4fc;
+  color: #4F46E5;
   margin: 2px;
 }}
 .tag-removable::after {{
@@ -2281,7 +2289,7 @@ async def activity_feed(request: web.Request):
             parts.append(f'<div class="feed-time">{time_str}</div>')
             parts.append(f'<div class="feed-icon">{icon}</div>')
             parts.append('<div class="feed-content">')
-            parts.append(f'<div class="feed-title"><a href="/web/workers/{u.id}" style="color:#a5b4fc;text-decoration:none">{h(u.full_name or "?")}</a></div>')
+            parts.append(f'<div class="feed-title"><a href="/web/workers/{u.id}" style="color:#4F46E5;text-decoration:none">{h(u.full_name or "?")}</a></div>')
             parts.append(f'<div class="feed-desc">{wt_label} — {we.soni:.0f} dona</div>')
             parts.append('</div>')
             parts.append(f'<div class="feed-value">{fmt(we.jami_summa)}</div>')
@@ -3145,7 +3153,7 @@ h1 {{ margin: 0 0 8px 0; font-size: 24px; color: #f1f5f9 }}
 table {{ width: 100%; border-collapse: collapse }}
 td {{ border-bottom: 1px solid #334155 }}
 tr:last-child td {{ border-bottom: none }}
-h2 {{ font-size: 16px; margin: 16px 0 10px; color: #818cf8 }}
+h2 {{ font-size: 16px; margin: 16px 0 10px; color: #4F46E5 }}
 .footer {{ text-align: center; padding: 12px; color: #64748b; font-size: 12px }}
 </style></head><body>
 <div class="container">
@@ -3241,7 +3249,7 @@ async def zero_stock_page(request: web.Request):
             tur = (" — " + h(p.tur)) if p.tur else ""
 
             badges = []
-            if p.razmer:     badges.append('<span style="background:rgba(99,102,241,.15);color:#a5b4fc;padding:2px 8px;border-radius:8px;font-size:11px">' + h(p.razmer) + '</span>')
+            if p.razmer:     badges.append('<span style="background:rgba(99,102,241,.15);color:#4F46E5;padding:2px 8px;border-radius:8px;font-size:11px">' + h(p.razmer) + '</span>')
             if p.razmer_tur: badges.append('<span style="background:rgba(139,92,246,.15);color:#c4b5fd;padding:2px 8px;border-radius:8px;font-size:11px">' + h(p.razmer_tur) + '</span>')
             if p.rang:       badges.append('<span style="background:rgba(236,72,153,.15);color:#f9a8d4;padding:2px 8px;border-radius:8px;font-size:11px">🎨 ' + h(p.rang) + '</span>')
 
@@ -4176,7 +4184,7 @@ async def inventory_health(request: web.Request):
 .health-num {{ font-weight:700; font-size:14px }}
 .badge {{
   display:inline-block; padding:2px 8px; border-radius:4px;
-  background:rgba(99,102,241,0.2); color:#a5b4fc;
+  background:rgba(99,102,241,0.2); color:#4F46E5;
   font-size:10px; font-weight:600; margin-left:6px;
 }}
 
@@ -4663,7 +4671,7 @@ async def notifications_center(request: web.Request):
 .filter-red    {{ background:rgba(239,68,68,0.15); color:#fca5a5 }}
 .filter-orange {{ background:rgba(245,158,11,0.15); color:#fcd34d }}
 .filter-purple {{ background:rgba(139,92,246,0.15); color:#c4b5fd }}
-.filter-gray   {{ background:rgba(100,116,139,0.15); color:#cbd5e1 }}
+.filter-gray   {{ background:rgba(100,116,139,0.15); color:#535C78 }}
 .filter-dark   {{ background:rgba(15,23,42,0.5); color:#94a3b8 }}
 
 .notif-section {{
@@ -6154,7 +6162,7 @@ _CAT_CFG = {
     },
     "tayyor_mahsulot": {
         "title": "📦 Tayyor mahsulot",
-        "turlar": {"adyol":"🛏 Adyol","pastel":"💼 Pastel","poyabzal":"👟 Poyabzal","shirinlik":"🍰 Shirinlik","fast_food":"🍔 Fast food","boshqa":"📝 Boshqa"},
+        "turlar": {"adyol":"🛏 Adyol","pastel":"💼 Pastel","diplomat":"🧳 Diplomat","poyabzal":"👟 Poyabzal","shirinlik":"🍰 Shirinlik","fast_food":"🍔 Fast food","tushli":"🍱 Tushli","blok":"🧱 Blok","boshqa":"📝 Boshqa"},
         "extra_cols": [("Razmer","razmer"),("Rang","rang")],
     },
     "qolip": {
@@ -6354,49 +6362,64 @@ def _add_form_fields(cat_key: str, cfg: dict, tur_filter: str = "") -> str:
       <input type="number" name="yellow_threshold" value="5" min="0"></div>
     </div>"""
 
-    # Adyol/pastel — turdan avtomatik 3 qismli forma (omborchi panel bilan bir xil)
-    if cat_key in ("yarim_tayyor", "xromazes", "laminat_xromazes", "gofra_zagatovka"):
+    # Qismli mahsulot tanlovi (omborchi panel bilan bir xil) — barcha bo'limlarda
+    if True:
         fields += """
-    <input type="hidden" name="kind" id="adm-kind" value="oddiy">
-    <div id="adm-kind-info" style="display:none;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);color:#a5b4fc;border-radius:10px;padding:9px 11px;margin:8px 0;font-size:12px;font-weight:600"></div>
+    <div class="fg"><label class="fl">Necha qismli?</label>
+    <select name="kind" id="adm-kind" onchange="admKindUI()">
+      <option value="oddiy">1 — Oddiy (bitta mahsulot)</option>
+      <option value="ikki">2 — TEPA + PAST (tort, shirinlik, qozon...)</option>
+      <option value="adyol">3 — Adyol (TEPA, PAST, YON ×2)</option>
+      <option value="pastel">3 — Pastel (TEPA, PAST, PADDO)</option>
+    </select></div>
+    <div id="adm-kind-info" style="display:none;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);color:#4F46E5;border-radius:10px;padding:9px 11px;margin:8px 0;font-size:12px;font-weight:600"></div>
     <div id="adm-qism-box" style="display:none">
-      <div style="font-size:12px;font-weight:700;color:#a5b4fc;margin-bottom:6px">Har qism — razmer va soni:</div>
+      <div style="font-size:12px;font-weight:700;color:#4F46E5;margin-bottom:6px">Har qism — razmer va soni:</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <span style="min-width:48px;font-size:11px;font-weight:800;color:#a5b4fc">TEPA</span>
+        <span style="min-width:48px;font-size:11px;font-weight:800;color:#4F46E5">TEPA</span>
         <input name="razmer_tepa" placeholder="razmer" style="flex:1">
         <input name="qism_tepa" type="number" step="any" placeholder="soni" value="0" style="flex:1"></div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <span style="min-width:48px;font-size:11px;font-weight:800;color:#a5b4fc">PAST</span>
+        <span style="min-width:48px;font-size:11px;font-weight:800;color:#4F46E5">PAST</span>
         <input name="razmer_past" placeholder="razmer" style="flex:1">
         <input name="qism_past" type="number" step="any" placeholder="soni" value="0" style="flex:1"></div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <span style="min-width:48px;font-size:11px;font-weight:800;color:#a5b4fc" id="adm-q3-lbl">YON</span>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px" id="adm-q3-row">
+        <span style="min-width:48px;font-size:11px;font-weight:800;color:#4F46E5" id="adm-q3-lbl">YON</span>
         <input name="razmer_3" placeholder="razmer" style="flex:1">
         <input name="qism_3" type="number" step="any" placeholder="soni" value="0" style="flex:1"></div>
     </div>
     <script>
-    (function(){
-      var form=document.currentScript.closest('form')||document;
-      var turSel=form.querySelector('[name=tur]');
+    function admKindUI(){
+      var form=document.getElementById('adm-kind').closest('form')||document;
+      var kind=document.getElementById('adm-kind').value;
       var box=document.getElementById('adm-qism-box');
       var info=document.getElementById('adm-kind-info');
-      var kindInp=document.getElementById('adm-kind');
-      function upd(){
+      var q3=document.getElementById('adm-q3-row');
+      var miq=form.querySelector('[name=miqdor]');
+      var qsel=form.querySelector('select[name=qism]');
+      if(kind==='oddiy'){box.style.display='none';info.style.display='none';
+        if(miq)miq.closest('.fg').style.display='';if(qsel)qsel.closest('.fg').style.display='';return;}
+      box.style.display='';info.style.display='';
+      if(miq)miq.closest('.fg').style.display='none';if(qsel)qsel.closest('.fg').style.display='none';
+      if(kind==='ikki'){q3.style.display='none';
+        info.textContent='📦 2 qism (TEPA, PAST) — tort/shirinlik/qozon karobka';}
+      else{q3.style.display='flex';
+        info.textContent=(kind==='pastel')?'💼 Pastel — 3 qism (TEPA, PAST, PADDO)':'🛏 Adyol — 3 qism (TEPA, PAST, YON)';
+        document.getElementById('adm-q3-lbl').textContent=(kind==='pastel')?'PADDO':'YON';}
+    }
+    (function(){
+      var form=document.getElementById('adm-kind').closest('form')||document;
+      var turSel=form.querySelector('[name=tur]');
+      function auto(){
         var t=(turSel&&turSel.value)||'';
         var kind='oddiy';
         if(t.indexOf('adyol')===0)kind='adyol';
         else if(t.indexOf('pastel')===0)kind='pastel';
-        kindInp.value=kind;
-        var miq=form.querySelector('[name=miqdor]');
-        var qsel=form.querySelector('select[name=qism]');
-        if(kind==='oddiy'){box.style.display='none';info.style.display='none';
-          if(miq)miq.closest('.fg').style.display='';if(qsel)qsel.closest('.fg').style.display='';}
-        else{box.style.display='';info.style.display='';
-          info.textContent=(kind==='pastel')?'💼 Pastel — 3 qism (TEPA, PAST, PADDO)':'🛏 Adyol — 3 qism (TEPA, PAST, YON)';
-          document.getElementById('adm-q3-lbl').textContent=(kind==='pastel')?'PADDO':'YON';
-          if(miq)miq.closest('.fg').style.display='none';if(qsel)qsel.closest('.fg').style.display='none';}
+        document.getElementById('adm-kind').value=kind;
+        admKindUI();
       }
-      if(turSel){turSel.addEventListener('change',upd);upd();}
+      if(turSel){turSel.addEventListener('change',auto);}
+      auto();
     })();
     </script>"""
 
@@ -6405,6 +6428,62 @@ def _add_form_fields(cat_key: str, cfg: dict, tur_filter: str = "") -> str:
 
 
 @_require_auth
+@_require_auth
+async def tayyor_chiqim(request: web.Request):
+    """Tayyor mahsulot CHIQIMI: nima chiqdi, kim chiqardi, qachon, izoh."""
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import desc as _desc
+        from database.models import WarehouseLog, User as _User
+        rows = (await db.execute(
+            select(WarehouseLog, WarehouseProduct, _User)
+            .join(WarehouseProduct, WarehouseLog.product_id == WarehouseProduct.id)
+            .outerjoin(_User, WarehouseLog.user_id == _User.id)
+            .where(
+                WarehouseProduct.category == ProductCategory.tayyor_mahsulot,
+                WarehouseLog.amal == "chiqim",
+            )
+            .order_by(_desc(WarehouseLog.created_at))
+            .limit(300)
+        )).all()
+
+        tm_turlar = _CAT_CFG.get("tayyor_mahsulot", {}).get("turlar", {})
+        body = ""
+        jami = 0.0
+        for log, prod, user in rows:
+            jami += float(log.miqdor or 0)
+            tur_lbl = tm_turlar.get(prod.tur or "", prod.tur or "—")
+            dt = log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else "—"
+            who = h(user.full_name) if user else "—"
+            body += f"""
+            <tr>
+              <td class="t-sm">{dt}</td>
+              <td><b>{h(prod.name)}</b>{(' <span class="t-muted t-sm">'+h(prod.razmer)+'</span>') if prod.razmer else ''}</td>
+              <td><span class="badge">{tur_lbl}</span></td>
+              <td class="td-n cv-red">−{log.miqdor:.0f} {h(prod.birlik or 'dona')}</td>
+              <td>👤 {who}</td>
+              <td class="t-sm t-muted">{h(log.izoh or '')}</td>
+            </tr>"""
+        if not rows:
+            body = '<tr><td colspan="6" class="empty-state">📭 Hozircha chiqim yo\'q</td></tr>'
+
+        content = f"""
+<div class="card-hd mb12">
+  <div>
+    <h1 style="font-size:19px">📤 Tayyor mahsulot chiqimi</h1>
+    <div class="t-sm t-muted">Oxirgi 300 ta chiqim · jami −{jami:.0f}</div>
+  </div>
+  <a href="/web/ombor/tayyor_mahsulot" class="btn btn-s">📦 Tayyor mahsulot bo'limi</a>
+</div>
+<div class="card"><div class="tbl-wrap">
+<table>
+  <tr><th>Sana</th><th>Mahsulot</th><th>Tur</th><th>Miqdor</th><th>Kim chiqardi</th><th>Izoh</th></tr>
+  {body}
+</table>
+</div></div>"""
+        return web.Response(text=_base("Tayyor chiqimi", "tayyor-chiqim", content),
+                            content_type="text/html")
+
+
 async def ombor_cats(request: web.Request):
     """Barcha ombor bo'limlari overview."""
     async with AsyncSessionLocal() as db:
@@ -6641,7 +6720,7 @@ async def ombor_cat_detail(request: web.Request):
                     rows_html += f"""
                     <tr style="border-left:3px solid #6366f1">
                       <td style="padding-left:18px">
-                        <span style="background:rgba(99,102,241,.15);color:#818cf8;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:700">{qico} {qlbl}</span>
+                        <span style="background:rgba(99,102,241,.15);color:#4F46E5;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:700">{qico} {qlbl}</span>
                         <span style="color:var(--text2);font-size:12px;margin-left:4px">{h(p.razmer or '')}</span>
                       </td>
                       <td></td>
@@ -6927,18 +7006,13 @@ async def ombor_cat_add(request: web.Request):
         except ValueError:
             miqdor = min_t = 0; yel_t = 5; qalinlik = None
 
-        # Adyol/pastel — turdan AVTOMATIK aniqlash (omborchi panel bilan bir xil)
+        # "Necha qismli?" tanlovi (oddiy / ikki / adyol / pastel)
         tur_v = _f("tur")
-        multi_cats = {"yarim_tayyor", "xromazes", "laminat_xromazes", "gofra_zagatovka"}
-        kind = "oddiy"
-        if cat_key in multi_cats:
-            if tur_v.startswith("adyol"):
-                kind = "adyol"
-            elif tur_v.startswith("pastel"):
-                kind = "pastel"
+        kind = _f("kind") or "oddiy"
+        if kind not in ("oddiy", "ikki", "adyol", "pastel"):
+            kind = "oddiy"
 
-        if kind in ("adyol", "pastel"):
-            third = "paddo" if kind == "pastel" else "yon"
+        if kind in ("adyol", "pastel", "ikki"):
             def _fnum(k):
                 try:
                     return float((_f(k, "0") or "0").replace(",", "."))
@@ -6947,8 +7021,10 @@ async def ombor_cat_add(request: web.Request):
             qismlar = [
                 ("tepa", _f("razmer_tepa") or razmer_raw, _fnum("qism_tepa")),
                 ("past", _f("razmer_past") or razmer_raw, _fnum("qism_past")),
-                (third,  _f("razmer_3") or razmer_raw,    _fnum("qism_3")),
             ]
+            if kind != "ikki":
+                third = "paddo" if kind == "pastel" else "yon"
+                qismlar.append((third,  _f("razmer_3") or razmer_raw, _fnum("qism_3")))
             for qism_v, rz, miq in qismlar:
                 db.add(WarehouseProduct(
                     category=cat_enum, name=_f("name") or "Noma'lum", tur=tur_v or None,
@@ -7053,7 +7129,7 @@ body{{background:#0f172a;display:flex;align-items:center;justify-content:center;
 .card{{background:#1e293b;border-radius:16px;padding:40px;width:340px;box-shadow:0 25px 50px rgba(0,0,0,.5)}}
 h1{{color:#f1f5f9;font-size:22px;margin-bottom:8px;text-align:center}}
 p{{color:#94a3b8;font-size:13px;text-align:center;margin-bottom:28px}}
-label{{color:#cbd5e1;font-size:12px;font-weight:600;display:block;margin-bottom:6px}}
+label{{color:#535C78;font-size:12px;font-weight:600;display:block;margin-bottom:6px}}
 input{{width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;
        padding:10px 14px;color:#f1f5f9;font-size:14px;outline:none}}
 input:focus{{border-color:#6366f1}}
@@ -7204,7 +7280,7 @@ async def help_page(request: web.Request):
             items_html += f'<div style="padding:10px 14px;border-left:3px solid #6366f1;margin-bottom:8px;background:rgba(99,102,241,.05);border-radius:0 8px 8px 0"><div style="font-weight:700;color:#f1f5f9;font-size:13px">{name}</div><div style="color:#94a3b8;font-size:12px;margin-top:2px">{desc}</div></div>'
         html += f'<div class="card" style="margin-bottom:16px"><h3>{title}</h3>{items_html}</div>'
 
-    content = f'<h1>❓ Yordam</h1>{html}<div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1))"><h3 style="color:#a5b4fc">💡 Maslahat</h3><p style="color:#cbd5e1;font-size:13px">Web panel va bot avtomatik sinxronlashadi.</p></div>'
+    content = f'<h1>❓ Yordam</h1>{html}<div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1))"><h3 style="color:#4F46E5">💡 Maslahat</h3><p style="color:#535C78;font-size:13px">Web panel va bot avtomatik sinxronlashadi.</p></div>'
     return web.Response(text=_base("Yordam", "help", content), content_type="text/html")
 
 
@@ -7298,7 +7374,7 @@ async def notifications_page(request: web.Request):
         <div class="stat-label">Sariq zona</div>
       </div>
       <div class="stat-card" style="background:rgba(99,102,241,.08);border-left:4px solid #6366f1">
-        <div class="stat-num" style="color:#a5b4fc">{len(rejected)}</div>
+        <div class="stat-num" style="color:#4F46E5">{len(rejected)}</div>
         <div class="stat-label">Rad etilgan ishlar</div>
       </div>
     </div>
@@ -7362,8 +7438,8 @@ async def system_info(request: web.Request):
     </div>
 
     <div class="card" style="margin-top:16px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1))">
-      <h3 style="color:#a5b4fc">🎯 Quti Tsexi Bot v5.0</h3>
-      <p style="color:#cbd5e1;font-size:13px;line-height:1.7">
+      <h3 style="color:#4F46E5">🎯 Quti Tsexi Bot v5.0</h3>
+      <p style="color:#535C78;font-size:13px;line-height:1.7">
         Karobka ishlab chiqarish korxonasi uchun mo\'ljallangan ish boshqaruv tizimi.<br>
         Ishchilar, omborchi va admin uchun alohida funksionallik.<br>
         Real vaqtda statistika va hisobotlar.
@@ -7373,11 +7449,11 @@ async def system_info(request: web.Request):
     <div class="card" style="margin-top:16px">
       <h3>📝 So\'nggi yangiliklar</h3>
       <ul style="list-style:none;padding:0;margin:10px 0">
-        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#cbd5e1;font-size:13px">✅ Mobil moslashtirish qo\'shildi</li>
-        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#cbd5e1;font-size:13px">✅ Kengaytirilgan statistika sahifasi</li>
-        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#cbd5e1;font-size:13px">✅ Material oqimi sahifasi</li>
-        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#cbd5e1;font-size:13px">✅ Bildirishnomalar markazi</li>
-        <li style="padding:8px 0;color:#cbd5e1;font-size:13px">✅ Yordam sahifasi</li>
+        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#535C78;font-size:13px">✅ Mobil moslashtirish qo\'shildi</li>
+        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#535C78;font-size:13px">✅ Kengaytirilgan statistika sahifasi</li>
+        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#535C78;font-size:13px">✅ Material oqimi sahifasi</li>
+        <li style="padding:8px 0;border-bottom:1px solid rgba(99,102,241,.1);color:#535C78;font-size:13px">✅ Bildirishnomalar markazi</li>
+        <li style="padding:8px 0;color:#535C78;font-size:13px">✅ Yordam sahifasi</li>
       </ul>
     </div>
     '''
@@ -7455,7 +7531,7 @@ async def analytics_page(request: web.Request):
 
     <div class="grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0">
       <div class="stat-card stat-card-gradient">
-        <div class="stat-num" style="color:#a5b4fc">{total_workers}</div>
+        <div class="stat-num" style="color:#4F46E5">{total_workers}</div>
         <div class="stat-label">Jami ishchilar</div>
       </div>
       <div class="stat-card stat-card-gradient">
@@ -7546,6 +7622,7 @@ def create_app() -> web.Application:
     app.router.add_get("/web/warehouse/csv-import",  warehouse_csv_import)
     app.router.add_post("/web/warehouse/csv-import", warehouse_csv_import)
     app.router.add_get("/web/ombor",                 ombor_cats)
+    app.router.add_get("/web/tayyor-chiqim",          tayyor_chiqim)
     app.router.add_get("/web/ombor/{cat_key}",       ombor_cat_detail)
     app.router.add_post("/web/ombor/{cat_key}/add",  ombor_cat_add)
     app.router.add_post("/web/ombor/quick-transfer",  ombor_admin_quick_transfer)

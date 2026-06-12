@@ -798,8 +798,14 @@ async def ombor_qoshish(request: web.Request):
     p.append('<form method="post" action="/web/ombor-panel/qoshish" class="add-form">')
     p.append('<label>Bo\'lim (kategoriya) *</label>'
              '<select name="category" id="cat" class="fld" onchange="updTur()" required>' + cat_options + '</select>')
-    p.append('<label>Tur</label><select name="tur" id="tur" class="fld" onchange="updKind()"></select>')
-    p.append('<input type="hidden" name="kind" id="kind" value="oddiy">')
+    p.append('<label>Tur</label><select name="tur" id="tur" class="fld" onchange="autoKind()"></select>')
+    p.append('<label>Necha qismli?</label>'
+             '<select name="kind" id="kind" class="fld" onchange="kindUI()">'
+             '<option value="oddiy">1 — Oddiy (bitta mahsulot)</option>'
+             '<option value="ikki">2 — TEPA + PAST (tort, shirinlik, qozon...)</option>'
+             '<option value="adyol">3 — Adyol (TEPA, PAST, YON ×2)</option>'
+             '<option value="pastel">3 — Pastel (TEPA, PAST, PADDO)</option>'
+             '</select>')
     p.append('<div id="kind-info" class="kind-info" style="display:none"></div>')
 
     p.append('<label>Nomi *</label><input name="name" class="fld" placeholder="Masalan: Istanbul adyol Katta" required>')
@@ -826,7 +832,7 @@ async def ombor_qoshish(request: web.Request):
              '<div class="qrow"><div class="qlbl">PAST</div>'
              '<input name="razmer_past" class="fld qfld" placeholder="razmer">'
              '<input name="qism_past" type="number" step="any" class="fld qfld" placeholder="soni" value="0"></div>'
-             '<div class="qrow"><div class="qlbl" id="q3-lbl">YON</div>'
+             '<div class="qrow" id="q3-row"><div class="qlbl" id="q3-lbl">YON</div>'
              '<input name="razmer_3" class="fld qfld" placeholder="razmer">'
              '<input name="qism_3" type="number" step="any" class="fld qfld" placeholder="soni" value="0"></div>'
              '<div class="muted2">Har qism alohida ombor yozuvi bo\'ladi, lekin bitta ramkada ko\'rinadi. Razmer bo\'sh bo\'lsa — yuqoridagi umumiy razmer ishlatiladi.</div></div>')
@@ -841,26 +847,29 @@ async def ombor_qoshish(request: web.Request):
     multi_cats_js = _json.dumps(multi_cats)
 
     p.append('<script>var TURLAR=' + turlar_js + ';'
-             'var MULTICATS=' + multi_cats_js + ';'
              'function updTur(){var c=document.getElementById("cat").value;'
              'var sel=document.getElementById("tur");var ts=TURLAR[c]||{};'
              'sel.innerHTML="<option value=\\"\\">— tur tanlanmagan —</option>";'
              'for(var k in ts){var o=document.createElement("option");o.value=k;o.textContent=ts[k];sel.appendChild(o);}'
-             'updKind();}'
-             # Turga qarab avtomatik: adyol/pastel bo'lsa 3 qism formasi chiqadi
-             'function updKind(){'
-             'var c=document.getElementById("cat").value;'
+             'autoKind();}'
+             # Turga qarab avtomatik standart tanlash (foydalanuvchi o'zgartirishi mumkin)
+             'function autoKind(){'
              'var t=document.getElementById("tur").value||"";'
              'var kind="oddiy";'
-             'if(MULTICATS.indexOf(c)>=0){'
              'if(t.indexOf("adyol")===0)kind="adyol";'
-             'else if(t.indexOf("pastel")===0)kind="pastel";}'
+             'else if(t.indexOf("pastel")===0)kind="pastel";'
              'document.getElementById("kind").value=kind;'
+             'kindUI();}'
+             # Tanlovga qarab formani ko'rsatish: oddiy / ikki(2) / adyol(3) / pastel(3)
+             'function kindUI(){'
+             'var kind=document.getElementById("kind").value;'
              'var qbox=document.getElementById("qism-box");var mbox=document.getElementById("miqdor-box");'
-             'var info=document.getElementById("kind-info");'
-             'if(kind==="oddiy"){qbox.style.display="none";mbox.style.display="block";info.style.display="none";}'
-             'else{qbox.style.display="block";mbox.style.display="none";'
-             'info.style.display="block";'
+             'var info=document.getElementById("kind-info");var q3=document.getElementById("q3-row");'
+             'if(kind==="oddiy"){qbox.style.display="none";mbox.style.display="block";info.style.display="none";return;}'
+             'qbox.style.display="block";mbox.style.display="none";info.style.display="block";'
+             'if(kind==="ikki"){q3.style.display="none";'
+             'info.textContent="📦 2 qism (TEPA, PAST) — tort/shirinlik/qozon karobka";}'
+             'else{q3.style.display="flex";'
              'info.textContent=(kind==="pastel")?"💼 Pastel — 3 qism (TEPA, PAST, PADDO)":"🛏 Adyol — 3 qism (TEPA, PAST, YON)";'
              'document.getElementById("q3-lbl").textContent=(kind==="pastel")?"PADDO":"YON";}}'
              'updTur();</script>')
@@ -885,18 +894,10 @@ async def ombor_qoshish_post(request: web.Request):
         except (ValueError, TypeError):
             return default
 
-    # Kind ni turdan server tomonida aniqlash (ishonchli, JS ishlamasa ham)
+    # Kind formadagi "Necha qismli?" tanlovidan (oddiy / ikki / adyol / pastel)
     tur_v = (data.get("tur") or "").strip()
-    multi_cats = {"yarim_tayyor", "xromazes", "laminat_xromazes", "gofra_zagatovka"}
     kind = (data.get("kind") or "oddiy").strip()
-    if cat.value in multi_cats:
-        if tur_v.startswith("adyol"):
-            kind = "adyol"
-        elif tur_v.startswith("pastel"):
-            kind = "pastel"
-        else:
-            kind = "oddiy"
-    else:
+    if kind not in ("oddiy", "ikki", "adyol", "pastel"):
         kind = "oddiy"
     def _gram():
         try:
@@ -918,17 +919,18 @@ async def ombor_qoshish_post(request: web.Request):
     )
 
     async with AsyncSessionLocal() as db:
-        if kind in ("adyol", "pastel"):
-            # 3 qism — har biri O'Z razmeri bilan, alohida yozuv
-            third_qism = "paddo" if kind == "pastel" else "yon"
+        if kind in ("adyol", "pastel", "ikki"):
+            # Qismli: ikki=2 qism (TEPA,PAST), adyol/pastel=3 qism. Har biri O'Z razmeri.
             common_razmer = (data.get("razmer") or "").strip() or None
             def _rz(key):
                 return (data.get(key) or "").strip() or common_razmer
             qismlar = [
                 ("tepa", _rz("razmer_tepa"), _f("qism_tepa", 0)),
                 ("past", _rz("razmer_past"), _f("qism_past", 0)),
-                (third_qism, _rz("razmer_3"), _f("qism_3", 0)),
             ]
+            if kind != "ikki":
+                third_qism = "paddo" if kind == "pastel" else "yon"
+                qismlar.append((third_qism, _rz("razmer_3"), _f("qism_3", 0)))
             for qism, rz, miq in qismlar:
                 row = dict(base)
                 row["razmer"] = rz

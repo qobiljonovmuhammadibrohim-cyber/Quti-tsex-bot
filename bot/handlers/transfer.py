@@ -41,8 +41,12 @@ CAT_NAMES = {
 }
 
 TUR_NAMES = {
-    "tiger_uchun":         "Tiger kesish uchun",
-    "gofra_kley_uchun":    "Gofra kley uchun",
+    "tiger_uchun":            "Tiger kesish uchun",
+    "gofra_kley_zagatovka":   "Gofra kley — zagatovka",
+    "gofra_kley_xromazes":    "Gofra kley — xromazes",
+    "gofra_uchun_rulon":      "Gofra uchun rulon",
+    "list_qogoz_uchun_rulon": "List qog'oz uchun rulon",
+    "zagatovka_uchun_gofra":  "Zagatovka uchun gofra",
     "stepler_uchun":       "Stepler tikish uchun",
     "salafan_uchun":       "Rulonga salafan uchun",
     "yopish_uchun":        "Yopishtirish uchun",

@@ -173,6 +173,29 @@ def _normalize_razmer(val) -> str | None:
 
 
 
+def _detect_tayyor_tur(nomi: str) -> str:
+    """Mahsulot nomidan tayyor mahsulot turini aniqlash.
+    adyollar adyol turiga, tuflilar poyabzal turiga va h.k."""
+    n = (nomi or "").lower()
+    if "adyol" in n or "adyo" in n:
+        return "adyol"
+    if "diplomat" in n:
+        return "diplomat"
+    if "pastel" in n or "pastil" in n:
+        return "pastel"
+    if "poyabzal" in n or "tufli" in n or "tufl" in n or "obuv" in n or "etik" in n:
+        return "poyabzal"
+    if "shirinlik" in n or "tort" in n or "konfet" in n or "pirog" in n:
+        return "shirinlik"
+    if "fast" in n or "burger" in n or "lavash" in n or "hot dog" in n or "hotdog" in n:
+        return "fast_food"
+    if "tushli" in n or "tushlik" in n:
+        return "tushli"
+    if "blok" in n:
+        return "blok"
+    return "boshqa"
+
+
 # ═══ OPS FUNKSIYALARI ═════════════════════════════════════════════════════════
 
 async def gofra_ishlab_ops(bot, db, data, user_id, work_entry_id):
@@ -246,7 +269,7 @@ async def laminatsiya_ops(bot, db, data, user_id, work_entry_id):
 
     dest_tur_map = {
         "tiger": "tiger_uchun",
-        "gofra": "gofra_kley_uchun",
+        "gofra": "gofra_kley_xromazes",   # TUZATILDI: gofra kley o'qiydigan jonli tur
         "boshqa": None,  # yarim_tayyor, tur=None (boshqa)
     }
     dest_tur   = dest_tur_map.get(dest, "tiger_uchun")
@@ -385,10 +408,19 @@ async def gofra_kiley_ops(bot, db, data, user_id, work_entry_id):
         if w:
             warns.append(w)
 
-    mahsulot_nomi = f"{nomi}"
-    if razmer:
-        mahsulot_nomi += f" {razmer}"
-    mahsulot_nomi += f" {sloy}sloy"
+    # Manba xromazesning qism/rang ini natijaga ko'chiramiz (ramka buzilmasin)
+    src_qism = src_rang = None
+    if xrom_id:
+        _xp = await db.get(WarehouseProduct, xrom_id)
+        if _xp:
+            src_qism = _xp.qism
+            src_rang = _xp.rang
+            if _xp.name:
+                nomi = _xp.name
+
+    # Nom toza qoladi (razmer alohida maydonda) — sloy nomga qo'shiladi,
+    # chunki barcha qismlarda bir xil va 3/5 sloyni farqlaydi
+    mahsulot_nomi = f"{nomi} {sloy}sloy"
 
     await _kirim(
         db,
@@ -396,8 +428,10 @@ async def gofra_kiley_ops(bot, db, data, user_id, work_entry_id):
         name=mahsulot_nomi,
         miqdor=soni,
         user_id=user_id,
-        izoh=f"Go'fra kiley tayyor → Tiger: {razmer or '?'}, {sloy}sloy",
+        izoh=f"Go'fra kiley tayyor → Tiger: {razmer or '?'}, {sloy}sloy {(src_qism or '').upper()}",
         razmer=razmer,
+        rang=src_rang,
+        qism=src_qism,
         tur="tiger_uchun",
         work_entry_id=work_entry_id,
     )
@@ -416,6 +450,16 @@ async def tiger_kesish_ops(bot, db, data, user_id, work_entry_id):
     nomi   = _str_or_none(data.get("mahsulot_nomi")) or "Kesilgan mahsulot"
     dest   = _str_or_none(data.get("dest_tur")) or "adyol_tikish_uchun"
     src_id = data.get("src_product_id")
+
+    # Manbaning qism/rang/nomini natijaga ko'chiramiz (zanjir bo'ylab saqlanadi)
+    src_qism = src_rang = None
+    if src_id:
+        _sp = await db.get(WarehouseProduct, src_id)
+        if _sp:
+            src_qism = _sp.qism
+            src_rang = _sp.rang
+            if _sp.name:
+                nomi = _sp.name
 
     if src_id:
         w = await _chiqim(
@@ -438,6 +482,9 @@ async def tiger_kesish_ops(bot, db, data, user_id, work_entry_id):
             user_id=user_id,
             izoh=f"Tiger kesish → Tayyor mahsulot: {razmer or '?'}, {soni} dona",
             razmer=razmer,
+            rang=src_rang,
+            qism=src_qism,
+            tur=_detect_tayyor_tur(nomi),
             work_entry_id=work_entry_id,
         )
     else:
@@ -450,6 +497,8 @@ async def tiger_kesish_ops(bot, db, data, user_id, work_entry_id):
             user_id=user_id,
             izoh=f"Tiger kesishdan: {razmer or '?'} → {dest}",
             razmer=razmer,
+            rang=src_rang,
+            qism=src_qism,
             tur=dest,
             work_entry_id=work_entry_id,
         )
@@ -502,6 +551,7 @@ async def list_qogoz_ops(bot, db, data, user_id, work_entry_id):
             miqdor=soni,
             user_id=user_id,
             izoh=f"List kesdi → Tayyor mahsulotlar: {razmer or '?'} {soni}kg",
+            tur=_detect_tayyor_tur(nomi),
             razmer=razmer,
             birlik="kg",
             work_entry_id=work_entry_id,
@@ -550,6 +600,7 @@ async def stepler_tikish_ops(bot, db, data, user_id, work_entry_id):
         user_id=user_id,
         izoh=f"Stepler tikish tayyor: {razmer or '?'}, {soni} dona",
         razmer=razmer,
+        tur=_detect_tayyor_tur(nomi),
         work_entry_id=work_entry_id,
     )
     return warns
@@ -670,6 +721,7 @@ async def yopishtirma_ops(bot, db, data, user_id, work_entry_id):
         user_id=user_id,
         izoh=f"Yopishtirma tayyor: {razmer or '?'}, {soni} dona",
         razmer=razmer,
+        tur=_detect_tayyor_tur(nomi),
         work_entry_id=work_entry_id,
     )
     return warns

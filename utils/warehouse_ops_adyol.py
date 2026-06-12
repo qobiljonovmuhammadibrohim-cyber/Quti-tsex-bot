@@ -89,7 +89,7 @@ async def _chiqim(db, product_id, miqdor, user_id, izoh, work_entry_id=None):
 
 
 async def _kirim(db, category, name, miqdor, user_id, izoh,
-                 razmer=None, rang=None, tur=None, birlik="dona", work_entry_id=None):
+                 razmer=None, rang=None, tur=None, qism=None, birlik="dona", work_entry_id=None):
     """Omborga kirim. Mavjud bo'lsa yangilaydi, yo'q bo'lsa yaratadi."""
     q = select(WarehouseProduct).where(
         WarehouseProduct.category == category,
@@ -100,6 +100,7 @@ async def _kirim(db, category, name, miqdor, user_id, izoh,
     if razmer: q = q.where(WarehouseProduct.razmer == razmer)
     if rang:   q = q.where(WarehouseProduct.rang == rang)
     if tur:    q = q.where(WarehouseProduct.tur == tur)
+    if qism:   q = q.where(WarehouseProduct.qism == qism)
     r = await db.execute(q.limit(1))
     product = r.scalar_one_or_none()
     if product:
@@ -107,7 +108,7 @@ async def _kirim(db, category, name, miqdor, user_id, izoh,
     else:
         product = WarehouseProduct(
             category=category, name=name,
-            razmer=razmer, rang=rang, tur=tur,
+            razmer=razmer, rang=rang, tur=tur, qism=qism,
             miqdor=float(miqdor), birlik=birlik,
         )
         db.add(product)
@@ -135,18 +136,25 @@ async def adyol_tikish_ops(bot, db, data, user_id, work_entry_id):
     rang   = _str_or_none(data.get("rang"))
     src_id = data.get("src_product_id")
 
+    src_qism = None
     if src_id:
+        _sp = await db.get(WarehouseProduct, src_id)
+        if _sp:
+            src_qism = _sp.qism
+            if _sp.name:   nomi   = _sp.name
+            if _sp.razmer: razmer = _sp.razmer
+            if _sp.rang:   rang   = _sp.rang
         # Yarim tayyordan (adyol_tikish_uchun) ayirish
         w = await _chiqim(
             db, src_id, soni, user_id,
-            f"Adyol tikish: {nomi} {razmer or ''}, {soni} komple",
+            f"Adyol tikish: {nomi} {(src_qism or '').upper()} {razmer or ''}, {soni} dona",
             work_entry_id,
         )
         if w: warns.append(w)
     else:
         warns.append("Adyol tikish: material tanlanmadi (adyol_tikish_uchun)")
 
-    # Tikilgan karobkalarni qoqish uchun yarim tayyorga qo'shish
+    # Tikilganlarni qoqish uchun yarim tayyorga — qism/razmer/rang SAQLANADI
     if soni > 0:
         await _kirim(
             db,
@@ -154,9 +162,10 @@ async def adyol_tikish_ops(bot, db, data, user_id, work_entry_id):
             name=nomi,
             miqdor=soni,
             user_id=user_id,
-            izoh=f"Adyol tikish tayyor → Qoqish uchun: {razmer or '?'}",
+            izoh=f"Adyol tikish tayyor → Qoqish uchun: {(src_qism or '').upper()} {razmer or '?'}",
             razmer=razmer,
             rang=rang,
+            qism=src_qism,
             tur="adyol_qoqish_uchun",
             work_entry_id=work_entry_id,
         )
@@ -173,8 +182,17 @@ async def diplomat_tikish_ops(bot, db, data, user_id, work_entry_id):
     soni   = _safe_int(data.get("soni", 0))
     nomi   = _str_or_none(data.get("mahsulot_nomi")) or "Pastel karobka"
     rang   = _str_or_none(data.get("rang"))
+    razmer = _str_or_none(data.get("razmer"))
     src_id = data.get("src_product_id")
 
+    src_qism = None
+    if src_id:
+        _sp = await db.get(WarehouseProduct, src_id)
+        if _sp:
+            src_qism = _sp.qism
+            if _sp.name:   nomi   = _sp.name
+            if _sp.razmer: razmer = _sp.razmer
+            if getattr(_sp, "rang", None): rang = _sp.rang
     if src_id:
         w = await _chiqim(
             db, src_id, soni, user_id,
@@ -194,6 +212,7 @@ async def diplomat_tikish_ops(bot, db, data, user_id, work_entry_id):
             user_id=user_id,
             izoh=f"Diplomat tikish tayyor → Qoqish uchun",
             rang=rang,
+            qism=src_qism,
             tur="pastel_qoqish_uchun",
             work_entry_id=work_entry_id,
         )
@@ -224,20 +243,28 @@ async def adyol_qoqish_ops(bot, db, data, user_id, work_entry_id):
 
 async def _adyol_qoqish_xom(db, data, user_id, work_entry_id):
     """
-    XOM qoqish: tikilgan karobkalarni (adyol_qoqish_uchun) qismlab qoqish
-    Chiqim: yarim_tayyor (adyol_qoqish_uchun) — tikilgan karobkalar
-    Kirim:  yarim_tayyor (xom_komple) — qoqilgan lekin bitilmagan
+    XOM qoqish: tikilgan karobkalarni (adyol_qoqish_uchun) qismlab qoqish.
+    Chiqim: yarim_tayyor (adyol_qoqish_uchun) — tanlangan QISM
+    Kirim:  yarim_tayyor (xom_komple) — XUDDI O'SHA qism/razmer/rang/nom bilan,
+            shunda xom_komple ham ramka (qismli) ko'rinishda turadi.
     """
     warns  = []
-    soni   = _safe_int(data.get("soni", 0))  # umumiy komple soni
+    soni   = _safe_int(data.get("soni", 0))
     nomi   = _str_or_none(data.get("mahsulot_nomi")) or "Adyol xom komple"
     src_id = data.get("src_product_id")
 
+    src_qism = src_razmer = src_rang = None
     if src_id:
-        # Tikilgan karobkalardan ayirish (adyol_qoqish_uchun)
+        src = await db.get(WarehouseProduct, src_id)
+        if src:
+            # Natijaga manbaning xususiyatlarini ko'chiramiz
+            nomi       = src.name or nomi
+            src_qism   = src.qism
+            src_razmer = src.razmer
+            src_rang   = src.rang
         w = await _chiqim(
             db, src_id, soni, user_id,
-            f"Adyol XOM qoqish: {nomi}, {soni} komple",
+            f"Adyol XOM qoqish: {nomi} {(src_qism or '').upper()}, {soni} dona",
             work_entry_id,
         )
         if w: warns.append(w)
@@ -251,7 +278,10 @@ async def _adyol_qoqish_xom(db, data, user_id, work_entry_id):
             name=nomi,
             miqdor=soni,
             user_id=user_id,
-            izoh=f"Adyol XOM qoqish tayyor → Xom komple: {soni} dona",
+            izoh=f"Adyol XOM qoqish → Xom komple: {(src_qism or '').upper()} {soni} dona",
+            razmer=src_razmer,
+            rang=src_rang,
+            qism=src_qism,
             tur="xom_komple",
             work_entry_id=work_entry_id,
         )
@@ -272,12 +302,15 @@ async def _adyol_qoqish_kapalak(db, data, user_id, work_entry_id):
     src_id    = data.get("src_product_id")
     group_ids = data.get("group_ids", [])
 
-    # Grouped set — barcha qismlardan ayirish
+    # Grouped set — barcha qismlardan ayirish (1 komple: tepa −1, past −1, YON −2)
     if group_ids:
         for pid in group_ids:
+            p = await db.get(WarehouseProduct, pid)
+            need = soni * (2 if (p and (p.qism or "").lower() == "yon") else 1)
+            qlbl = ((p.qism or "") if p else "").upper()
             w = await _chiqim(
-                db, pid, soni, user_id,
-                f"Adyol kapalak (grouped): {nomi}, {soni} dona",
+                db, pid, need, user_id,
+                f"Adyol kapalak: {nomi} {qlbl}, {need} dona ({soni} komple)",
                 work_entry_id,
             )
             if w: warns.append(w)
@@ -291,6 +324,7 @@ async def _adyol_qoqish_kapalak(db, data, user_id, work_entry_id):
     else:
         warns.append("Adyol kapalak: manba tanlanmadi")
 
+    rang = _str_or_none(data.get("rang"))
     if soni > 0:
         if is_tayyor:
             # To'g'ridan tayyor mahsulotga
@@ -301,6 +335,7 @@ async def _adyol_qoqish_kapalak(db, data, user_id, work_entry_id):
                 miqdor=soni,
                 user_id=user_id,
                 izoh=f"Adyol kapalak → Tayyor mahsulot: {soni} dona",
+                rang=rang,
                 tur="adyol",
                 work_entry_id=work_entry_id,
             )
@@ -313,6 +348,7 @@ async def _adyol_qoqish_kapalak(db, data, user_id, work_entry_id):
                 miqdor=soni,
                 user_id=user_id,
                 izoh=f"Adyol kapalak → Yarim tayyor (kapalak): {soni} dona",
+                rang=rang,
                 tur="kapalak",
                 work_entry_id=work_entry_id,
             )
@@ -378,19 +414,26 @@ async def pastel_qoqish_ops(bot, db, data, user_id, work_entry_id):
 
 async def _pastel_qoqish_xom(db, data, user_id, work_entry_id):
     """
-    XOM qoqish: tepa + past
-    Chiqim: yarim_tayyor (pastel_qoqish_uchun)
-    Kirim:  yarim_tayyor (xom_komple)
+    XOM qoqish: pastel qismlarini qoqish.
+    Chiqim: yarim_tayyor (pastel_qoqish_uchun) — tanlangan QISM
+    Kirim:  yarim_tayyor (xom_komple) — xuddi o'sha qism/razmer/rang/nom bilan.
     """
     warns  = []
     soni   = _safe_int(data.get("soni", 0))
     nomi   = _str_or_none(data.get("mahsulot_nomi")) or "Pastel xom komple"
     src_id = data.get("src_product_id")
 
+    src_qism = src_razmer = src_rang = None
     if src_id:
+        src = await db.get(WarehouseProduct, src_id)
+        if src:
+            nomi       = src.name or nomi
+            src_qism   = src.qism
+            src_razmer = src.razmer
+            src_rang   = src.rang
         w = await _chiqim(
             db, src_id, soni, user_id,
-            f"Pastel XOM qoqish: {nomi}, {soni} dona",
+            f"Pastel XOM qoqish: {nomi} {(src_qism or '').upper()}, {soni} dona",
             work_entry_id,
         )
         if w: warns.append(w)
@@ -404,7 +447,10 @@ async def _pastel_qoqish_xom(db, data, user_id, work_entry_id):
             name=nomi,
             miqdor=soni,
             user_id=user_id,
-            izoh=f"Pastel XOM qoqish → Xom komple: {soni} dona",
+            izoh=f"Pastel XOM qoqish → Xom komple: {(src_qism or '').upper()} {soni} dona",
+            razmer=src_razmer,
+            rang=src_rang,
+            qism=src_qism,
             tur="xom_komple",
             work_entry_id=work_entry_id,
         )
@@ -421,9 +467,12 @@ async def _pastel_qoqish_kapalak(db, data, user_id, work_entry_id):
 
     if group_ids:
         for pid in group_ids:
+            p = await db.get(WarehouseProduct, pid)
+            need = soni * (2 if (p and (p.qism or "").lower() == "yon") else 1)
+            qlbl = ((p.qism or "") if p else "").upper()
             w = await _chiqim(
-                db, pid, soni, user_id,
-                f"Pastel kapalak grouped: {nomi}",
+                db, pid, need, user_id,
+                f"Pastel kapalak: {nomi} {qlbl}, {need} dona ({soni} komple)",
                 work_entry_id)
             if w: warns.append(w)
     elif src_id:
