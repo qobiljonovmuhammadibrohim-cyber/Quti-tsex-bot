@@ -122,6 +122,13 @@ async def migrate():
             """,
         ),
         (
+            "alert_enabled",
+            """
+            ALTER TABLE warehouse_products
+            ADD COLUMN IF NOT EXISTS alert_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+            """,
+        ),
+        (
             "customers jadvali",
             """
             CREATE TABLE IF NOT EXISTS customers (

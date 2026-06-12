@@ -2593,6 +2593,7 @@ async def warehouse(request: web.Request):
   <button class="btn btn-g btn-xs" onclick="openKirim({p.id}, '{h(p.name)}', '{h(p.birlik)}')">+Kirim</button>
   <button class="btn btn-d btn-xs" onclick="openChiqim({p.id}, '{h(p.name)}', {p.miqdor}, '{h(p.birlik)}')">-Chiqim</button>
   <button class="btn btn-cy btn-xs" onclick="openThresh({p.id}, '{h(p.name)}', {p.min_threshold}, {p.yellow_threshold})">⚙️</button>
+  <button class="btn btn-xs {"btn-g" if getattr(p,"alert_enabled",True) else "bgr"}" style='{"" if getattr(p,"alert_enabled",True) else "opacity:0.55"}' title='{"Xabar yoqilgan — o&#39;chirish uchun bosing" if getattr(p,"alert_enabled",True) else "Xabar o&#39;chirilgan — yoqish uchun bosing"}' onclick="toggleAlert({p.id}, this)">{"🔔" if getattr(p,"alert_enabled",True) else "🔕"}</button>
   <a href="/web/warehouse/delete-confirm/{p.id}" class="btn btn-d btn-xs" title="O'chirish" onclick="return confirm('Ushbu mahsulotni butunlay ochirmoqchimisiz?')">🗑</a>
 </td>
 </tr>"""
@@ -2799,6 +2800,36 @@ function deleteProduct(id) {
   .then(function(d) {
     if (d.ok) { location.reload(); }
     else { alert('Xato: ' + (d.error || 'nomalum')); }
+  })
+  .catch(function(e) { alert('Tarmoq xatosi: ' + e); });
+}
+
+
+function toggleAlert(productId, btn) {
+  var isOn = btn.textContent.trim() === '🔔';
+  var newVal = isOn ? 0 : 1;
+  fetch('/web/warehouse/alert-toggle', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({product_id: productId, alert_enabled: newVal})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      if (newVal === 1) {
+        btn.textContent = '🔔';
+        btn.className = btn.className.replace('bgr', 'btn-g');
+        btn.style.opacity = '';
+        btn.title = "Xabar yoqilgan \u2014 o\u02bbchirish uchun bosing";
+      } else {
+        btn.textContent = '🔕';
+        btn.className = btn.className.replace('btn-g', 'bgr');
+        btn.style.opacity = '0.55';
+        btn.title = "Xabar o\u02bbchirilgan \u2014 yoqish uchun bosing";
+      }
+    } else {
+      alert('Xato: ' + (d.error || 'nomalum'));
+    }
   })
   .catch(function(e) { alert('Tarmoq xatosi: ' + e); });
 }
@@ -3418,6 +3449,36 @@ async def warehouse_thresholds(request: web.Request):
                 product.yellow_threshold = yr
                 await db.commit()
     raise web.HTTPFound("/web/warehouse")
+
+
+@_require_auth
+async def warehouse_alert_toggle(request: web.Request):
+    """Mahsulot uchun bildirishnoma yoq/o'chir."""
+    try:
+        data = await request.json()
+        pid           = int(data.get("product_id", 0))
+        alert_enabled = bool(int(data.get("alert_enabled", 1)))
+    except Exception as e:
+        return web.json_response({"ok": False, "error": f"Noto'g'ri ma'lumot: {e}"})
+
+    if pid <= 0:
+        return web.json_response({"ok": False, "error": "ID noto'g'ri"})
+
+    async with AsyncSessionLocal() as db:
+        product = await db.get(WarehouseProduct, pid)
+        if not product:
+            return web.json_response({"ok": False, "error": "Mahsulot topilmadi"})
+        product.alert_enabled = alert_enabled
+        await db.commit()
+
+    status = "yoqildi 🔔" if alert_enabled else "o'chirildi 🔕"
+    return web.json_response({
+        "ok": True,
+        "product_id": pid,
+        "alert_enabled": alert_enabled,
+        "message": f"Bildirishnoma {status}"
+    })
+
 
 async def warehouse_export(request: web.Request):
     async with AsyncSessionLocal() as db:
@@ -7294,23 +7355,35 @@ async def notifications_page(request: web.Request):
         from sqlalchemy import func as sf
 
         # Past qoldiq mahsulotlar
+        # Past qoldiq — faqat xabar yoqilgan mahsulotlar
         r = await db.execute(
             select(WarehouseProduct).where(
                 WarehouseProduct.miqdor <= WarehouseProduct.min_threshold,
                 WarehouseProduct.is_active == True,
+                WarehouseProduct.alert_enabled == True,
             ).order_by(WarehouseProduct.miqdor).limit(50)
         )
         low_stock = r.scalars().all()
 
-        # Sariq zona
+        # Sariq zona — faqat xabar yoqilgan mahsulotlar
         r = await db.execute(
             select(WarehouseProduct).where(
                 WarehouseProduct.miqdor > WarehouseProduct.min_threshold,
                 WarehouseProduct.miqdor <= WarehouseProduct.yellow_threshold,
                 WarehouseProduct.is_active == True,
+                WarehouseProduct.alert_enabled == True,
             ).order_by(WarehouseProduct.miqdor).limit(30)
         )
         yellow = r.scalars().all()
+
+        # Xabar o'chirilgan mahsulotlar soni
+        r_off = await db.execute(
+            select(func.count(WarehouseProduct.id)).where(
+                WarehouseProduct.is_active == True,
+                WarehouseProduct.alert_enabled == False,
+            )
+        )
+        alerts_off_count = r_off.scalar() or 0
 
         # So'nggi rad etilgan ishlar
         r = await db.execute(
@@ -7364,18 +7437,22 @@ async def notifications_page(request: web.Request):
     content = f'''
     <h1>🔔 Bildirishnomalar</h1>
 
-    <div class="grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0">
+    <div class="grid-3" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:20px 0">
       <div class="stat-card" style="background:rgba(239,68,68,.08);border-left:4px solid #ef4444">
         <div class="stat-num" style="color:#f87171">{len(low_stock)}</div>
-        <div class="stat-label">Past qoldiq</div>
+        <div class="stat-label">🔔 Past qoldiq</div>
       </div>
       <div class="stat-card" style="background:rgba(245,158,11,.08);border-left:4px solid #f59e0b">
         <div class="stat-num" style="color:#fbbf24">{len(yellow)}</div>
-        <div class="stat-label">Sariq zona</div>
+        <div class="stat-label">🔔 Sariq zona</div>
       </div>
       <div class="stat-card" style="background:rgba(99,102,241,.08);border-left:4px solid #6366f1">
         <div class="stat-num" style="color:#4F46E5">{len(rejected)}</div>
         <div class="stat-label">Rad etilgan ishlar</div>
+      </div>
+      <div class="stat-card" style="background:rgba(100,116,139,.08);border-left:4px solid #64748b">
+        <div class="stat-num" style="color:#94a3b8">{alerts_off_count}</div>
+        <div class="stat-label">🔕 Xabar o&#39;chirilgan</div>
       </div>
     </div>
 
@@ -7660,6 +7737,7 @@ def create_app() -> web.Application:
     app.router.add_post("/web/warehouse/kirim",       warehouse_kirim)
     app.router.add_post("/web/warehouse/chiqim",      warehouse_chiqim)
     app.router.add_post("/web/warehouse/thresholds",  warehouse_thresholds)
+    app.router.add_post("/web/warehouse/alert-toggle", warehouse_alert_toggle)
     app.router.add_get("/web/warehouse/export",       warehouse_export)
     app.router.add_get("/web/warehouse/logs",         warehouse_logs)
     app.router.add_post("/web/warehouse/delete",      warehouse_delete)

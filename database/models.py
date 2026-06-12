@@ -192,6 +192,7 @@ class WarehouseProduct(Base):
     qism              = Column(String(20), nullable=True)  # tepa/past/yon/paddo
     yonalish          = Column(String(20), nullable=True)  # tiger/zagatovka
     zero_notified     = Column(Boolean, default=False, nullable=True)  # 0 ga tushganda admin xabardor
+    alert_enabled     = Column(Boolean, default=True,  nullable=False, server_default="true")  # bildirishnoma yoq/o'chir
     yonalish          = Column(String(20), nullable=True)  # tiger | zagatovka | laminat
     # Qoliplar uchun
     holat             = Column(Enum(ProductHolat), nullable=True)
